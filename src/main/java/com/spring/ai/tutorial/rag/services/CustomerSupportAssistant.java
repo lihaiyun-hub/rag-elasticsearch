@@ -16,6 +16,7 @@
 
 package com.spring.ai.tutorial.rag.services;
 
+import com.spring.ai.tutorial.rag.tools.ChangePlanTools;
 import com.spring.ai.tutorial.rag.tools.TimeTools;
 import com.spring.ai.tutorial.rag.tools.WeatherTools;
 import org.springframework.ai.chat.client.ChatClient;
@@ -26,6 +27,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
+import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import java.time.LocalDate;
 
 import static org.springframework.ai.chat.client.advisor.vectorstore.VectorStoreChatMemoryAdvisor.TOP_K;
@@ -51,8 +53,8 @@ public class CustomerSupportAssistant {
         // @formatter:off
         this.chatClient = modelBuilder
                 .defaultSystem(systemPromptResource)
-                .defaultTools(new TimeTools(), new WeatherTools())
-                .defaultAdvisors(promptChatMemoryAdvisor, retrievalAugmentationAdvisor)
+                .defaultTools(new TimeTools(), new WeatherTools(),new ChangePlanTools())
+                .defaultAdvisors(promptChatMemoryAdvisor)
                 .defaultOptions(ToolCallingChatOptions.builder()
                         .internalToolExecutionEnabled(true)
                         .build())

@@ -7,10 +7,15 @@ import org.springframework.ai.rag.postretrieval.document.DocumentPostProcessor;
 import org.springframework.ai.rag.retrieval.search.DocumentRetriever;
 import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.ai.template.st.StTemplateRenderer;
+import org.springframework.core.io.Resource;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
+import org.springframework.ai.vectorstore.SearchRequest;
 
 import java.util.List;
 
@@ -28,6 +33,7 @@ public class RetrieveConfig {
     @Value("${spring.ai.rag.vector.similarity-threshold}")
     private double vectorSimilarityThreshold;
 
+
     private final List<DocumentPostProcessor> documentPostProcessors;
 
     public RetrieveConfig(List<DocumentPostProcessor> documentPostProcessors) {
@@ -40,6 +46,10 @@ public class RetrieveConfig {
                 .documentRetriever(hybridDocumentRetriever)
                 .queryAugmenter(ContextualQueryAugmenter.builder()
                         .allowEmptyContext(true)
+//                        .promptTemplate(PromptTemplate.builder()
+//                                .renderer(StTemplateRenderer.builder().startDelimiterToken('<').endDelimiterToken('>').build())
+//                                .resource(retrievePromptResource)
+//                                .build())
                         .build())
                 .documentPostProcessors(documentPostProcessors);
 
@@ -55,4 +65,6 @@ public class RetrieveConfig {
                 .topK(vectorTopK)
                 .build();
     }
+
+
 }
