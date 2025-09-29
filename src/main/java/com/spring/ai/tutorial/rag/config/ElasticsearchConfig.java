@@ -80,7 +80,7 @@ public class ElasticsearchConfig {
 
        return ElasticsearchVectorStore.builder(restClient, embeddingModel)
                .options(options)                     // Optional: use custom options
-               .initializeSchema(true)               // Optional: defaults to false
+               .initializeSchema(false)               // Respect application.yml to avoid startup/index init issues
                .batchingStrategy(new TokenCountBatchingStrategy())// Optional: defaults to TokenCountBatchingStrategy
                .build();
    }

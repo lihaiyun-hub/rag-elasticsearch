@@ -19,64 +19,62 @@ package com.spring.ai.tutorial.rag.services;
 import com.spring.ai.tutorial.rag.tools.ChangePlanTools;
 import com.spring.ai.tutorial.rag.tools.TimeTools;
 import com.spring.ai.tutorial.rag.tools.WeatherTools;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
+import org.springframework.ai.mcp.SyncMcpToolCallbackProvider;
+import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.io.IOException;
-import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
-import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import java.time.LocalDate;
 
 import static org.springframework.ai.chat.client.advisor.vectorstore.VectorStoreChatMemoryAdvisor.TOP_K;
 import static org.springframework.ai.chat.memory.ChatMemory.CONVERSATION_ID;
 
-/**
- * * @author Christian Tzolov
- * 模拟的是一个航空公司 Funnair 的客户支持助手，具备：
- * 自然语言交互（ChatClient）
- * 记忆能力（ChatMemory）
- * 知识检索（RAG via VectorStore）
- * 函数调用（Function Calling）
- */
+
 @Service
 public class CustomerSupportAssistant {
 
-
+    private static final Logger logger = LoggerFactory.getLogger(CustomerSupportAssistant.class);
     private ChatClient chatClient;
 
-    public CustomerSupportAssistant(Resource systemPromptResource, ChatClient.Builder modelBuilder, RetrievalAugmentationAdvisor retrievalAugmentationAdvisor, PromptChatMemoryAdvisor promptChatMemoryAdvisor) throws IOException {
-
-
+    public CustomerSupportAssistant(Resource systemPromptResource,
+                                    ChatClient.Builder modelBuilder,
+                                    RetrievalAugmentationAdvisor retrievalAugmentationAdvisor,
+                                    PromptChatMemoryAdvisor promptChatMemoryAdvisor,
+                                    ToolCallbackProvider tools) throws IOException {
         // @formatter:off
-        this.chatClient = modelBuilder
+        var builder = modelBuilder
                 .defaultSystem(systemPromptResource)
-                .defaultTools(new TimeTools(), new WeatherTools(),new ChangePlanTools())
+                .defaultTools( new ChangePlanTools())
                 .defaultAdvisors(promptChatMemoryAdvisor)
+                .defaultToolCallbacks(tools.getToolCallbacks())
                 .defaultOptions(ToolCallingChatOptions.builder()
                         .internalToolExecutionEnabled(true)
-                        .build())
-                .build();
+                        .build());
+
+        this.chatClient = builder.build();
         // @formatter:on
     }
 
     public String chat(String chatId, String userMessageContent) {
+        try {
 
-        return this.chatClient.prompt()
-                .system(s -> s.param("current_date", LocalDate.now().toString()))
-                .user(userMessageContent)
-                .advisors(
-                        // 设置advisor参数，
-                        // 记忆使用chatId，
-                        // 拉取最近的100条记录
-                        a -> a.param(CONVERSATION_ID, chatId).param(TOP_K, 100))
-                .call()
-                .content();
+            return this.chatClient.prompt()
+                    .system(s -> s.param("current_date", LocalDate.now().toString()))
+                    .user(userMessageContent)
+                    .advisors(a -> a.param(CONVERSATION_ID, chatId).param(TOP_K, 100))
+                    .call()
+                    .content();
+        } catch (Exception e) {
+            logger.error("Assistant chat processing failed", e);
+            return "抱歉，当前服务繁忙或工具调用出现问题，请稍后重试。";
+        }
     }
-
-
-
-
 }

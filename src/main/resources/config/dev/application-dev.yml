@@ -1,0 +1,46 @@
+server:
+  port: 8080
+
+spring:
+  ai:
+    chat:
+      client:
+        observations:
+          log-prompt: true
+    openai:
+      api-key: sk-dae20e2b5ec340a3bd0de1cc476c2894
+      base-url: https://dashscope.aliyuncs.com/compatible-mode
+      chat:
+        options:
+          model: qwen-max
+      embedding:
+        options:
+          model: text-embedding-v1
+
+    vectorstore:
+      elasticsearch:
+        initialize-schema: true
+        index-name: ai_loan1_
+        similarity: cosine
+        dimensions: 1536
+
+    rag:
+      hybrid:
+        top-k: 10
+        rrf-k: 60
+      bm25:
+        top-n: 20
+      vector:
+        top-k: 10
+        similarity-threshold: 0.75
+      reranker:
+        enabled: true
+        endpoint: https://api.siliconflow.cn/v1/rerank
+        model: BAAI/bge-reranker-v2-m3
+        timeout-ms: 3000
+        api-key: "sk-vcqgdvzbcchptznjpgcsyrfzrclvuvsidsrdpoyadgzgmtpg"
+
+  elasticsearch:
+    uris: http://127.0.0.1:9200
+    username: elastic
+    password: yingzi
