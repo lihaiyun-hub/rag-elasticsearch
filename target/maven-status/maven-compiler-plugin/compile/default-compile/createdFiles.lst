@@ -9,11 +9,9 @@ com\spring\ai\tutorial\rag\config\ObservationConfiguration$1.class
 com\spring\ai\tutorial\rag\utils\TimeUtils.class
 com\spring\ai\tutorial\rag\reranker\RerankPostProcessor.class
 com\spring\ai\tutorial\rag\config\ObservationConfiguration$2.class
-com\spring\ai\tutorial\rag\controller\AssistantController.class
 com\spring\ai\tutorial\rag\reranker\RerankService.class
 com\spring\ai\tutorial\rag\config\MemoryConfig.class
 com\spring\ai\tutorial\rag\transformer\ContextualRewriteQueryTransformer.class
-com\spring\ai\tutorial\rag\services\CustomerSupportAssistant.class
 com\spring\ai\tutorial\rag\retriever\HybridDocumentRetriever.class
 com\spring\ai\tutorial\rag\reranker\RerankService$RerankResponse.class
 com\spring\ai\tutorial\rag\config\QueryTransformerConfig.class
@@ -21,7 +19,6 @@ com\spring\ai\tutorial\rag\config\RetrieveConfig.class
 com\spring\ai\tutorial\rag\transformer\ContextualRewriteQueryTransformer$QueryHistoryPair.class
 com\spring\ai\tutorial\rag\config\ObservationConfiguration$3.class
 com\spring\ai\tutorial\rag\config\PromptConfig.class
-com\spring\ai\tutorial\rag\test\LangFuseIntegrationTest.class
 com\spring\ai\tutorial\rag\tools\TimeTools.class
 com\spring\ai\tutorial\rag\reranker\RerankService$RerankResponse$Usage.class
 com\spring\ai\tutorial\rag\tools\WeatherTools.class

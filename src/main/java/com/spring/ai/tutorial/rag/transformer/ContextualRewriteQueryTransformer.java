@@ -16,20 +16,15 @@
 
 package com.spring.ai.tutorial.rag.transformer;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.preretrieval.query.transformation.QueryTransformer;
-import org.springframework.core.io.Resource;
 import org.springframework.core.io.DefaultResourceLoader;
-
-import java.util.List;
-import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.core.io.Resource;
 
 public class ContextualRewriteQueryTransformer implements QueryTransformer {
 
@@ -53,6 +48,15 @@ public class ContextualRewriteQueryTransformer implements QueryTransformer {
     public Query transform(Query query) {
         // 获取用户消息
         String userText = query.text();
+        
+        // 处理简单的问候语查询
+        String processedQuery = handleSimpleQueries(userText);
+        if (!processedQuery.equals(userText)) {
+            logger.debug("Simple query detected and rewritten: {} -> {}", userText, processedQuery);
+            return Query.builder()
+                    .text(processedQuery)
+                    .build();
+        }
         
         // 解析可能包含历史记录的增强查询格式
         QueryHistoryPair parsed = parseEnhancedQuery(userText);
@@ -103,6 +107,43 @@ public class ContextualRewriteQueryTransformer implements QueryTransformer {
         }
         
         return new QueryHistoryPair(history, currentQuery);
+    }
+    
+    /**
+     * 处理简单的问候语和常见查询，避免被错误重写
+     */
+    private String handleSimpleQueries(String query) {
+        String cleanQuery = query.trim().toLowerCase();
+        
+        // 问候语处理
+        if (cleanQuery.matches("^(你好|您好|hi|hello|在吗|有人吗)$")) {
+            return "客服问候语和开场白";
+        }
+        
+        // 简单数字处理（避免被误解为金额）
+        if (cleanQuery.matches("^\\d+$")) {
+            return "借款" + query + "元";
+        }
+        
+        // 模糊表达处理
+        if (cleanQuery.contains("借不了") || cleanQuery.contains("借不到")) {
+            return "借款失败原因";
+        }
+        
+        if (cleanQuery.contains("提额") || cleanQuery.contains("提额度")) {
+            return "提升额度";
+        }
+        
+        if (cleanQuery.contains("提前还")) {
+            return "提前还款";
+        }
+        
+        if (cleanQuery.contains("额度") && cleanQuery.length() < 5) {
+            return "额度查询";
+        }
+        
+        // 保持原查询
+        return query;
     }
     
     /**

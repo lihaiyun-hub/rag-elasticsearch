@@ -75,8 +75,17 @@ public class ObservationConfiguration {
                 ChatClientRequest request = context.getRequest();
                 List<? extends Advisor> advisors = context.getAdvisors();
                 boolean stream = context.isStream();
-                logger.info("💬ChatClientObservation start: ChatClientRequest : {}, Advisors : {}, stream : {}",
-                        request, advisors, stream);
+                
+                logger.info("💬 ChatClient请求 - 顾问数量: {}, 流式: {}", 
+                        advisors != null ? advisors.size() : 0, 
+                        stream);
+                
+                // 只在有顾问时打印详细信息
+                if (advisors != null && !advisors.isEmpty()) {
+                    logger.info("🎯 激活的顾问: {}", 
+                            advisors.stream().map(a -> a.getName() + "(order:" + a.getOrder() + ")")
+                                    .collect(java.util.stream.Collectors.joining(", ")));
+                }
             }
 
             @Override
@@ -103,10 +112,20 @@ public class ObservationConfiguration {
             public void onStart(ChatModelObservationContext context) {
                 AiOperationMetadata operationMetadata = context.getOperationMetadata();
                 Prompt request = context.getRequest();
-                logger.info("🤖ChatModelObservation start: AiOperationMetadata : {}",
-                        operationMetadata);
-                logger.info("🤖ChatModelObservation start: Prompt : {}",
-                        request);
+                
+                if (request != null && request.getInstructions() != null) {
+                    logger.info("🤖 AI模型请求 - 操作: {}, 指令数量: {}", 
+                            operationMetadata != null ? operationMetadata.operationType() : "unknown",
+                            request.getInstructions().size());
+                    
+                    // 只打印关键信息，避免重复
+                    request.getInstructions().forEach(instruction -> {
+                        logger.info("  📋 {}: {}", instruction.getMessageType(), 
+                                instruction.getText().length() > 500 ?
+                                instruction.getText().substring(0, 500) + "..." :
+                                instruction.getText());
+                    });
+                }
             }
 
             @Override

@@ -12,7 +12,7 @@ spring:
     chat:
       client:
         observations:
-          log-prompt: true
+          log-prompt: false    # 禁用Spring AI内置提示日志，使用自定义日志
     openai:
       api-key: sk-dae20e2b5ec340a3bd0de1cc476c2894
       base-url: https://dashscope.aliyuncs.com/compatible-mode
@@ -31,13 +31,15 @@ spring:
         dimensions: 1536
 
     rag:
+      retriever:
+        type: hybrid  # 可选值: hybrid, vector, bm25
       hybrid:
-        top-k: 10
+        top-k: 5
         rrf-k: 60
       bm25:
-        top-n: 20
+        top-n: 5
       vector:
-        top-k: 10
+        top-k: 5
         similarity-threshold: 0.75
       reranker:
         enabled: true

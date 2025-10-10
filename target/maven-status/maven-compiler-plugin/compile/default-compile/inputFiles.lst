@@ -5,6 +5,7 @@ D:\workspace\rag-elasticsearch\src\main\java\com\spring\ai\tutorial\rag\config\O
 D:\workspace\rag-elasticsearch\src\main\java\com\spring\ai\tutorial\rag\config\PromptConfig.java
 D:\workspace\rag-elasticsearch\src\main\java\com\spring\ai\tutorial\rag\config\QueryTransformerConfig.java
 D:\workspace\rag-elasticsearch\src\main\java\com\spring\ai\tutorial\rag\config\RetrieveConfig.java
+D:\workspace\rag-elasticsearch\src\main\java\com\spring\ai\tutorial\rag\config\RetrieverSelectorConfig.java
 D:\workspace\rag-elasticsearch\src\main\java\com\spring\ai\tutorial\rag\controller\AssistantController.java
 D:\workspace\rag-elasticsearch\src\main\java\com\spring\ai\tutorial\rag\controller\TestController.java
 D:\workspace\rag-elasticsearch\src\main\java\com\spring\ai\tutorial\rag\model\UserContext.java
@@ -13,6 +14,12 @@ D:\workspace\rag-elasticsearch\src\main\java\com\spring\ai\tutorial\rag\reranker
 D:\workspace\rag-elasticsearch\src\main\java\com\spring\ai\tutorial\rag\reranker\RerankService.java
 D:\workspace\rag-elasticsearch\src\main\java\com\spring\ai\tutorial\rag\retriever\BM25DocumentRetriever.java
 D:\workspace\rag-elasticsearch\src\main\java\com\spring\ai\tutorial\rag\retriever\HybridDocumentRetriever.java
+D:\workspace\rag-elasticsearch\src\main\java\com\spring\ai\tutorial\rag\security\PromptInjectionFilter.java
+D:\workspace\rag-elasticsearch\src\main\java\com\spring\ai\tutorial\rag\security\RateLimitingService.java
+D:\workspace\rag-elasticsearch\src\main\java\com\spring\ai\tutorial\rag\security\ResponseSecurityMonitor.java
+D:\workspace\rag-elasticsearch\src\main\java\com\spring\ai\tutorial\rag\security\SecurityAuditLogger.java
+D:\workspace\rag-elasticsearch\src\main\java\com\spring\ai\tutorial\rag\security\SecurityConfiguration.java
+D:\workspace\rag-elasticsearch\src\main\java\com\spring\ai\tutorial\rag\security\SecurityExceptionHandler.java
 D:\workspace\rag-elasticsearch\src\main\java\com\spring\ai\tutorial\rag\services\CustomerSupportAssistant.java
 D:\workspace\rag-elasticsearch\src\main\java\com\spring\ai\tutorial\rag\test\LangFuseIntegrationTest.java
 D:\workspace\rag-elasticsearch\src\main\java\com\spring\ai\tutorial\rag\tools\ChangePlanTools.java

@@ -42,10 +42,10 @@ public class RetrieveConfig {
     }
 
     @Bean
-    public RetrievalAugmentationAdvisor retrievalAugmentationAdvisor(HybridDocumentRetriever hybridDocumentRetriever,
+    public RetrievalAugmentationAdvisor retrievalAugmentationAdvisor(DocumentRetriever selectedDocumentRetriever,
                                                                      List<QueryTransformer> queryTransformers) {
         RetrievalAugmentationAdvisor.Builder builder = RetrievalAugmentationAdvisor.builder()
-                .documentRetriever(hybridDocumentRetriever)
+                .documentRetriever(selectedDocumentRetriever)
                 .queryAugmenter(ContextualQueryAugmenter.builder()
                         .allowEmptyContext(true)
 //                        .promptTemplate(PromptTemplate.builder()
