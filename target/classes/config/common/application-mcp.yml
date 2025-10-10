@@ -1,7 +1,0 @@
-# MCP (Model Context Protocol) 通用配置模板
-# 该文件作为配置模板，实际的MCP配置在环境特定文件中定义
-# 开发环境：config/dev/application-mcp-dev.yml (默认禁用MCP)
-# 生产环境：config/prod/application-mcp-prod.yml (默认启用MCP)
-
-# 注意：不要在主配置文件中直接导入此文件
-# 环境特定的配置文件会自动导入对应的MCP配置

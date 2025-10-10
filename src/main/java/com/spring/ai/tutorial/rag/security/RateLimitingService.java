@@ -6,7 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -161,7 +161,7 @@ public class RateLimitingService {
             return 0;
         }
         
-        return ChronoUnit.MINUTES.between(LocalDateTime.now(), info.getBlockEndTime());
+        return Duration.between(LocalDateTime.now(), info.getBlockEndTime()).toMinutes();
     }
     
     /**
