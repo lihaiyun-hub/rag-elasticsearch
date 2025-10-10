@@ -14,7 +14,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@Component("BM25DocumentRetriever")
+@Component
 public class BM25DocumentRetriever implements DocumentRetriever {
 
     private final ElasticsearchClient elasticsearchClient;
