@@ -1,0 +1,9 @@
+# Memory Configuration - 生产环境
+# 生产环境下的对话内存配置
+
+spring:
+  ai:
+    chat:
+      memory:
+        max-messages: 20  # 生产环境：保存更多消息，提高对话连续性
+        top-k: 50        # 生产环境：减少TOP_K值，提高检索效率

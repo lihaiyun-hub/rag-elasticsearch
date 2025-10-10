@@ -1,0 +1,16 @@
+# MCP (Model Context Protocol) 配置 - 生产环境
+# 生产环境下启用MCP客户端连接
+
+spring:
+  ai:
+    mcp:
+      client:
+        enabled: true  # 生产环境下启用MCP客户端
+        name: my-mcp-client-prod
+        version: 1.0.0
+        request-timeout: 30s
+        type: ASYNC
+        sse:
+          connections:
+            server1:
+              url: http://localhost:19000  # 生产环境可以根据需要修改MCP服务器地址

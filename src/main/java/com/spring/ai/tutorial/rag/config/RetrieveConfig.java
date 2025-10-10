@@ -4,6 +4,7 @@ import com.spring.ai.tutorial.rag.retriever.HybridDocumentRetriever;
 import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
 import org.springframework.ai.rag.generation.augmentation.ContextualQueryAugmenter;
 import org.springframework.ai.rag.postretrieval.document.DocumentPostProcessor;
+import org.springframework.ai.rag.preretrieval.query.transformation.QueryTransformer;
 import org.springframework.ai.rag.retrieval.search.DocumentRetriever;
 import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -41,7 +42,8 @@ public class RetrieveConfig {
     }
 
     @Bean
-    public RetrievalAugmentationAdvisor retrievalAugmentationAdvisor(HybridDocumentRetriever hybridDocumentRetriever) {
+    public RetrievalAugmentationAdvisor retrievalAugmentationAdvisor(HybridDocumentRetriever hybridDocumentRetriever,
+                                                                     List<QueryTransformer> queryTransformers) {
         RetrievalAugmentationAdvisor.Builder builder = RetrievalAugmentationAdvisor.builder()
                 .documentRetriever(hybridDocumentRetriever)
                 .queryAugmenter(ContextualQueryAugmenter.builder()
@@ -51,7 +53,8 @@ public class RetrieveConfig {
 //                                .resource(retrievePromptResource)
 //                                .build())
                         .build())
-                .documentPostProcessors(documentPostProcessors);
+                .documentPostProcessors(documentPostProcessors)
+                .queryTransformers(queryTransformers);
 
         return builder.build();
     }

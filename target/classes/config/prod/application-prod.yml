@@ -2,6 +2,12 @@ server:
   port: 8080
 
 spring:
+  config:
+    import:
+      - optional:classpath:config/prod/application-mcp-prod.yml
+      - optional:classpath:config/prod/application-query-rewrite-prod.yml
+      - optional:classpath:config/prod/application-memory-prod.yml
+      - optional:classpath:config/prod/application-langfuse-prod.yml
   ai:
     chat:
       client:

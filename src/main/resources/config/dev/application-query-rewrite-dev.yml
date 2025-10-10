@@ -1,0 +1,9 @@
+# Query Rewriting Configuration - 开发环境
+# 开发环境下的查询重写配置
+
+spring:
+  ai:
+    rag:
+      query-rewrite:
+        enabled: true  # 开发环境下启用查询重写
+        # custom-prompt-resource: classpath:prompts/custom-rewrite-prompt.st  # 可选：自定义提示模板资源文件

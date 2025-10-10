@@ -2,10 +2,7 @@ package com.spring.ai.tutorial.rag.utils;
 
 import cn.hutool.extra.pinyin.PinyinUtil;
 
-/**
- * @author yingzi
- * @date 2025/3/26:13:26
- */
+
 public class WeatherUtils {
 
     public static String preprocessLocation(String location) {

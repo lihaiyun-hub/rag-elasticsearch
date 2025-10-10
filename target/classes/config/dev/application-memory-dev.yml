@@ -1,0 +1,9 @@
+# Memory Configuration - 开发环境
+# 开发环境下的对话内存配置
+
+spring:
+  ai:
+    chat:
+      memory:
+        max-messages: 10  # 开发环境：保存最近10条消息
+        top-k: 100       # 开发环境：TOP_K参数设置为100

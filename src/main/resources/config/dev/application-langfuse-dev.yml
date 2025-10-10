@@ -1,0 +1,33 @@
+# LangFuse 配置 - 简化版本
+langfuse:
+  enabled: true
+  host: http://localhost:3000
+  api:
+    key: "sk-lf-33c5f769-d90e-4ff0-bf6b-4a4950c9c5d1"
+  public:
+    key: "pk-lf-42b79370-7c74-4230-9942-e5455fa43d41"
+
+# OpenTelemetry 配置（Spring Boot Micrometer -> OpenTelemetry）
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: http://localhost:3000/api/public/otel/v1/traces
+      headers:
+        Authorization: Basic cGstbGYtNDJiNzkzNzAtN2M3NC00MjMwLTk5NDItZTU0NTVmYTQzZDQxOnNrLWxmLTMzYzVmNzY5LWQ5MGUtNGZmMC1iZjZiLTRhNDk1MGM5YzVkMQ==
+
+# 服务名称（可选，默认取 spring.application.name）
+spring:
+  application:
+    name: rag-elasticsearch-app
+
+# 开启 Spring AI 的可观测性（内容记录选项）
+spring.ai:
+  # 以下属性名称可能因版本而异，若无效可通过自定义 SpanProcessor 写入内容属性
+  observability:
+    enabled: true
+    record-inputs: true
+    record-outputs: true
+# 移除无效的自定义头以避免认证失败

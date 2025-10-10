@@ -18,6 +18,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.json.jackson.JacksonJsonpMapper;
+import co.elastic.clients.transport.rest_client.RestClientTransport;
+
 /**
 * @author yingzi
 * @date 2025/4/14:22:48
@@ -68,6 +72,12 @@ public class ElasticsearchConfig {
                .build();
    }
 
+   @Bean
+   public ElasticsearchClient elasticsearchClient(RestClient restClient) {
+       logger.info("create high-level ElasticsearchClient");
+       RestClientTransport transport = new RestClientTransport(restClient, new JacksonJsonpMapper());
+       return new ElasticsearchClient(transport);
+   }
    @Bean
    @Qualifier("elasticsearchVectorStore")
    public ElasticsearchVectorStore vectorStore(RestClient restClient, EmbeddingModel embeddingModel) {

@@ -1,0 +1,24 @@
+# 生产环境 LangFuse 配置
+# 生产环境配置，注重性能和安全性
+
+langfuse:
+  enabled: false  # 生产环境需要手动启用并配置正确的密钥
+  
+  # 生产环境建议使用 LangFuse Cloud 或自托管的安全实例
+  endpoint: https://cloud.langfuse.com/api/public
+  
+  # 生产环境必须配置有效的 API 密钥
+  api:
+    key: ""  # 从 LangFuse 控制台获取
+  public:
+    key: ""  # 从 LangFuse 控制台获取
+  
+  # 生产环境采样率根据需求调整
+  sampling:
+    probability: 0.1  # 10% 采样率，可根据实际情况调整
+    
+  # 生产环境隐私配置需要谨慎
+  privacy:
+    record-inputs: true   # 根据合规要求决定是否记录输入
+    record-outputs: true  # 根据合规要求决定是否记录输出
+    record-errors: true   # 建议记录错误信息用于监控

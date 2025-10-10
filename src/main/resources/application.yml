@@ -1,29 +1,17 @@
 # Profiles: create application-<profile>.yml files and activate via SPRING_PROFILES_ACTIVE or -Dspring.profiles.active
 spring:
   application:
-    name: loan-agent
+    name: rag-elasticsearch
   profiles:
     active: dev
   config:
     import:
-  #     - classpath:config/common/application-core.yml
-  #     - classpath:config/common/application-elasticsearch.yml
-  #     - classpath:config/common/application-ai.yml
-  #     - classpath:config/common/application-logging.yml
       - optional:classpath:config/dev/application-dev.yml
-      - optional:classpath:config/prod/application-prod.yml
-  ai:
-    mcp:
-      client:
-        enabled: true
-        name: my-mcp-client
-        version: 1.0.0
-        request-timeout: 30s
-        type: ASYNC  # or ASYNC for reactive applications
-        sse:
-          connections:
-            server1:
-              url: http://localhost:19000 # 本地
+#      - optional:classpath:config/prod/application-prod.yml
+
+logging:
+  level:
+    com.spring.ai.tutorial.rag.transformer.ContextualRewriteQueryTransformer: DEBUG
 
               
 
