@@ -5,10 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
-/**
- * @author yingzi
- * @date 2025/5/21 10:59
- */
+
 
 public class ChangePlanTools {
 
@@ -23,9 +20,9 @@ public class ChangePlanTools {
     }
 
     @Tool(description = "Apply for a loan with specified amount, installments and purpose")
-    public String applyForLoan(@ToolParam(description = "借款金额", required = true) String loanAmount,
-                              @ToolParam(description = "分期期数", required = true) String installments,
-                              @ToolParam(description = "借款用途", required = true) String purpose) {
+    public String applyForLoan(@ToolParam(description = "借款金额", required = false) String loanAmount,
+                              @ToolParam(description = "分期期数", required = false) String installments,
+                              @ToolParam(description = "借款用途", required = false) String purpose) {
         logger.info("Loan application: amount={}, installments={}, purpose={}", loanAmount, installments, purpose);
         
         // 验证借款参数

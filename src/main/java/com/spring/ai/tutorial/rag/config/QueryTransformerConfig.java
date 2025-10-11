@@ -1,9 +1,6 @@
 package com.spring.ai.tutorial.rag.config;
 
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.prompt.PromptTemplate;
-import org.springframework.ai.template.st.StTemplateRenderer;
-import org.springframework.ai.rag.preretrieval.query.transformation.RewriteQueryTransformer;
 import org.springframework.ai.rag.preretrieval.query.transformation.QueryTransformer;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;

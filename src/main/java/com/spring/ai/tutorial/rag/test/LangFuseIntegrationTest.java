@@ -29,7 +29,7 @@ public class LangFuseIntegrationTest implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        logger.info("🚀 开始 LangFuse 集成测试...");
+        logger.info("开始 LangFuse 集成测试...");
         
         try {
             String testChatId = "langfuse-test-chat-001";
@@ -65,13 +65,13 @@ public class LangFuseIntegrationTest implements CommandLineRunner {
             // 等待最终数据发送
             Thread.sleep(3000);
             
-            logger.info("✅ LangFuse 集成测试完成！");
-            logger.info("📊 请检查 LangFuse Web 界面: http://localhost:3000");
-            logger.info("🔍 查看是否收到了测试数据");
-            logger.info("💡 提示: 登录 LangFuse 后，可以在 'Traces' 页面查看详细的调用跟踪信息");
+            logger.info("LangFuse 集成测试完成！");
+            logger.info("请检查 LangFuse Web 界面: http://localhost:3000");
+            logger.info("查看是否收到了测试数据");
+            logger.info("提示: 登录 LangFuse 后，可以在 'Traces' 页面查看详细的调用跟踪信息");
             
         } catch (Exception e) {
-            logger.error("❌ 测试过程中出现错误", e);
+            logger.error("测试过程中出现错误", e);
         }
     }
 }

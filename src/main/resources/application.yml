@@ -1,4 +1,3 @@
-# Profiles: create application-<profile>.yml files and activate via SPRING_PROFILES_ACTIVE or -Dspring.profiles.active
 spring:
   application:
     name: rag-elasticsearch

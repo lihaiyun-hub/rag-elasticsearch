@@ -6,10 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
-/**
- * @author yingzi
- * @date 2025/5/21 10:59
- */
+
 
 public class TimeTools {
 

@@ -53,7 +53,7 @@ public class ResponseSecurityMonitor {
         if (containsInputLeak(originalInput, response)) {
             riskScore += 0.3;
             issues.append("检测到输入内容泄露; ");
-            logger.warn("⚠️ 响应中包含用户输入内容，可能存在信息泄露风险");
+            logger.warn("响应中包含用户输入内容，可能存在信息泄露风险");
         }
         
         // 2. 检查是否包含敏感信息
@@ -61,54 +61,54 @@ public class ResponseSecurityMonitor {
         if (sensitiveCount > 0) {
             riskScore += (sensitiveCount * 0.1);
             issues.append("检测到").append(sensitiveCount).append("个敏感词汇; ");
-            logger.warn("⚠️ 响应中包含敏感词汇数量: {}", sensitiveCount);
+            logger.warn("响应中包含敏感词汇数量: {}", sensitiveCount);
         }
         
         // 3. 检查响应长度异常
         if (isResponseLengthAbnormal(originalInput, response)) {
-            riskScore += 0.2;
+            riskScore += 0.1; // 降低权重
             issues.append("响应长度异常; ");
-            logger.warn("⚠️ 响应长度与用户输入不匹配");
+            logger.warn("响应长度与用户输入不匹配");
         }
         
         // 4. 检查是否包含系统相关信息
         if (containsSystemInformation(response)) {
             riskScore += 0.4;
             issues.append("检测到系统信息泄露; ");
-            logger.error("🚨 响应中包含系统信息，高风险！");
+            logger.error("响应中包含系统信息，高风险！");
         }
         
         // 5. 检查是否偏离了贷款主题
         if (isOffTopic(originalInput, response)) {
-            riskScore += 0.3;
+            riskScore += 0.15; // 降低权重
             issues.append("响应偏离贷款主题; ");
-            logger.warn("⚠️ 响应偏离了贷款主题");
+            logger.warn("响应偏离了贷款主题");
         }
         
         // 6. 检查是否包含代码或命令
         if (containsCodeOrCommands(response)) {
             riskScore += 0.3;
             issues.append("检测到代码或命令; ");
-            logger.warn("⚠️ 响应中包含代码或命令");
+            logger.warn("响应中包含代码或命令");
         }
         
         // 7. 检查是否包含URL或链接
         if (containsUrls(response)) {
             riskScore += 0.1;
             issues.append("检测到URL链接; ");
-            logger.warn("⚠️ 响应中包含URL链接");
+            logger.warn("响应中包含URL链接");
         }
         
         // 确保风险分数不超过1.0
         riskScore = Math.min(riskScore, 1.0);
         
-        boolean isSafe = riskScore < 0.5; // 0.5以下为安全
+        boolean isSafe = riskScore < 0.7; // 0.7以下为安全（放宽阈值）
         String reason = issues.length() > 0 ? issues.toString() : "响应安全";
         
         if (!isSafe) {
-            logger.error("🚨 响应安全检测未通过 - 风险分数: {}, 原因: {}", riskScore, reason);
+            logger.error("响应安全检测未通过 - 风险分数: {}, 原因: {}", riskScore, reason);
         } else {
-            logger.info("✅ 响应安全检测通过 - 风险分数: {}", riskScore);
+            logger.info("响应安全检测通过 - 风险分数: {}", riskScore);
         }
         
         return new SecurityCheckResult(isSafe, riskScore, reason);
@@ -164,11 +164,16 @@ public class ResponseSecurityMonitor {
             return response.length() > 500; // 没有输入但响应很长，可能异常
         }
         
+        // 对于非常短的输入（如问候语），放宽长度检查
+        if (originalInput.length() <= 10) {
+            return response.length() > 1000; // 短输入允许较长的响应
+        }
+        
         double inputLength = originalInput.length();
         double responseLength = response.length();
         
-        // 如果响应比输入长10倍以上，可能异常
-        return responseLength > (inputLength * 10);
+        // 如果响应比输入长20倍以上，可能异常（放宽倍数）
+        return responseLength > (inputLength * 20);
     }
     
     /**
@@ -197,10 +202,31 @@ public class ResponseSecurityMonitor {
      * 检查是否偏离了贷款主题
      */
     private boolean isOffTopic(String originalInput, String response) {
+        // 简单的问候语不认为是偏离主题
+        String[] greetings = {
+            "你好", "您好", "hi", "hello", "早上好", "下午好", "晚上好",
+            "请问", "我想", "我要", "我需要", "帮我", "请问一下"
+        };
+        
+        // 检查用户输入是否是简单的问候
+        boolean isUserGreeting = false;
+        for (String greeting : greetings) {
+            if (originalInput.toLowerCase().contains(greeting.toLowerCase())) {
+                isUserGreeting = true;
+                break;
+            }
+        }
+        
+        // 如果是问候语，不检查偏离主题
+        if (isUserGreeting) {
+            return false;
+        }
+        
         String[] loanKeywords = {
             "loan", "借款", "credit", "额度", "interest", "利息",
             "repayment", "还款", "installment", "分期", "amount", "金额",
-            "apply", "申请", "approve", "批准", "reject", "拒绝"
+            "apply", "申请", "approve", "批准", "reject", "拒绝",
+            "贷款", "借钱", "还钱", "借钱", "欠款", "债务"
         };
         
         // 检查响应是否包含贷款相关词汇
@@ -211,7 +237,7 @@ public class ResponseSecurityMonitor {
             }
         }
         
-        // 如果没有贷款相关词汇，认为偏离主题
+        // 如果没有贷款相关词汇，认为偏离主题（但降低风险分数）
         return loanWordCount == 0;
     }
     

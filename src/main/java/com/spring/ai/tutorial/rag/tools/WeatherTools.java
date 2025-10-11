@@ -17,10 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 
-/**
- * @author yingzi
- * @date 2025/3/26:13:19
- */
+
 public class WeatherTools {
 
     private static final Logger logger = LoggerFactory.getLogger(WeatherTools.class);

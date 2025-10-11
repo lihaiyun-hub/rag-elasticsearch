@@ -1,6 +1,8 @@
 server:
   port: 8082
 
+debug: true
+
 spring:
 #  autoconfigure:
 #    exclude:
@@ -27,7 +29,7 @@ spring:
       base-url: https://dashscope.aliyuncs.com/compatible-mode
       chat:
         options:
-          model: qwen-max
+          model: qwen3-max
       embedding:
         options:
           model: text-embedding-v1

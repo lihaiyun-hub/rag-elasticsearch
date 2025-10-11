@@ -2,10 +2,7 @@ package com.spring.ai.tutorial.rag.utils;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/**
- * @author yingzi
- * @date 2025/3/25:15:24
- */
+
 @ConfigurationProperties(prefix = "spring.ai.toolcalling.weather")
 public class WeatherProperties {
 

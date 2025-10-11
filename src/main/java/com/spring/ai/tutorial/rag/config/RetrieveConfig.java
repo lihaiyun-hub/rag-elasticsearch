@@ -42,10 +42,6 @@ public class RetrieveConfig {
                 .documentRetriever(selectedDocumentRetriever)
                 .queryAugmenter(ContextualQueryAugmenter.builder()
                         .allowEmptyContext(true)
-//                        .promptTemplate(PromptTemplate.builder()
-//                                .renderer(StTemplateRenderer.builder().startDelimiterToken('<').endDelimiterToken('>').build())
-//                                .resource(retrievePromptResource)
-//                                .build())
                         .build())
                 .documentPostProcessors(documentPostProcessors)
                 .queryTransformers(queryTransformers);

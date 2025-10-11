@@ -1,49 +1,37 @@
-/*
- * Copyright 2024-2024 the original author or authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+
 
 package com.spring.ai.tutorial.rag.services;
 
-import com.spring.ai.tutorial.rag.tools.ChangePlanTools;
-// import com.spring.ai.tutorial.rag.tools.TimeTools;
-// import com.spring.ai.tutorial.rag.tools.WeatherTools;
-import com.spring.ai.tutorial.rag.model.UserContext;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.ai.tutorial.rag.config.MemoryConfig;
+import com.spring.ai.tutorial.rag.flow.ChatResponse;
+import com.spring.ai.tutorial.rag.flow.IntentExtractor;
+import com.spring.ai.tutorial.rag.flow.IntentRouter;
+import com.spring.ai.tutorial.rag.model.UserContext;
 import com.spring.ai.tutorial.rag.security.PromptInjectionFilter;
 import com.spring.ai.tutorial.rag.security.ResponseSecurityMonitor;
 import com.spring.ai.tutorial.rag.security.SecurityAuditLogger;
+import com.spring.ai.tutorial.rag.tools.ChangePlanTools;
 import com.spring.ai.tutorial.rag.tools.TimeTools;
 import com.spring.ai.tutorial.rag.tools.WeatherTools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
 import org.springframework.ai.tool.ToolCallbackProvider;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.messages.Message;
-import org.springframework.beans.factory.ObjectProvider;
 
 import java.io.IOException;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
 
 import static org.springframework.ai.chat.client.advisor.vectorstore.VectorStoreChatMemoryAdvisor.TOP_K;
 import static org.springframework.ai.chat.memory.ChatMemory.CONVERSATION_ID;
@@ -59,6 +47,9 @@ public class CustomerSupportAssistant {
     private final PromptInjectionFilter promptInjectionFilter;
     private final ResponseSecurityMonitor responseSecurityMonitor;
     private final SecurityAuditLogger auditLogger;
+    private final IntentExtractor intentExtractor;
+    private final IntentRouter intentRouter;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public CustomerSupportAssistant(Resource systemPromptResource,
                                     ChatClient.Builder modelBuilder,
@@ -69,7 +60,9 @@ public class CustomerSupportAssistant {
                                     MemoryConfig memoryConfig,
                                     PromptInjectionFilter promptInjectionFilter,
                                     ResponseSecurityMonitor responseSecurityMonitor,
-                                    SecurityAuditLogger auditLogger) throws IOException {
+                                    SecurityAuditLogger auditLogger,
+                                    IntentExtractor intentExtractor,
+                                    IntentRouter intentRouter) throws IOException {
         // @formatter:off
         var builder = modelBuilder
                 .defaultSystem(systemPromptResource)
@@ -91,6 +84,8 @@ public class CustomerSupportAssistant {
         this.promptInjectionFilter = promptInjectionFilter;
         this.responseSecurityMonitor = responseSecurityMonitor;
         this.auditLogger = auditLogger;
+        this.intentExtractor = intentExtractor;
+        this.intentRouter = intentRouter;
         // @formatter:on
     }
 
@@ -124,6 +119,14 @@ public class CustomerSupportAssistant {
         String userId = userContext != null ? userContext.getUserName() : chatId;
 
         try {
+            // ==== 零侵入式多流程路由 ====
+            var intent = intentExtractor.extract(userMessageContent);
+            if (intent.confidence() >= 0.85 && !"UNKNOWN".equals(intent.intent())) {
+                ChatResponse flowResp = intentRouter.route(chatId, intent);
+                if (flowResp != null) return objectMapper.writeValueAsString(flowResp);
+            }
+            // ============================
+
             // 2. 输入安全检查
             PromptInjectionFilter.DetectionResult injectionResult =
                     promptInjectionFilter.detectInjection(userMessageContent);
@@ -150,29 +153,28 @@ public class CustomerSupportAssistant {
             logger.debug("Original query: {}", userMessageContent);
             logger.debug("Sanitized query: {}", sanitizedInput);
             logger.debug("History messages count: {}", history.size());
+            if (!history.isEmpty() && logger.isDebugEnabled()) {
+                logger.debug("Last message from history: {}", history.get(history.size() - 1).getText());
+            }
 
             // 6. 将历史记录和当前查询拼接成特殊格式，以便QueryTransformer可以获取历史
             String enhancedQuery = formatQueryWithHistory(history, sanitizedInput);
-            logger.debug("Enhanced query with history: {}", enhancedQuery);
+            logger.debug("Query formatted with history markers for transformer processing");
 
             // 7. 构建system prompt参数
             var systemParams = buildSystemParams(userContext);
 
-            // 打印最终发送到模型的参数
-            logger.info("🤖 最终发送到AI模型的参数:");
-            logger.info("📋 System参数: {}", systemParams);
-            logger.info("📅 当前日期: {}", LocalDate.now().toString());
-            logger.info("⏰ 当前时间: {}", java.time.LocalDateTime.now().toString());
-            logger.info("👤 用户查询: {}", enhancedQuery);
-            logger.info("🔧 Advisor参数: chatId={}, topK={}", chatId, memoryConfig.getTopK());
+            // 打印最终发送到模型的参数（简化日志，避免冗余的历史标记）
+            logger.info("最终发送到AI模型的参数:");
+            logger.info("System参数: {}", systemParams);
+            logger.info("当前日期: {}", LocalDate.now().toString());
+            logger.info("当前时间: {}", java.time.LocalDateTime.now().toString());
+            logger.info("用户查询: {} (历史记录已包含)", sanitizedInput);
+            logger.info("Advisor参数: chatId={}, topK={}", chatId, memoryConfig.getTopK());
 
             // 8. 调用chatClient获取响应
             String response = this.chatClient.prompt()
-                    .system(s -> {
-                        systemParams.forEach(s::param);
-                        s.param("current_date", LocalDate.now().toString());
-                        s.param("current_time", java.time.LocalDateTime.now().toString());
-                    })
+                    .system(s -> systemParams.forEach(s::param))
                     .user(enhancedQuery)
                     .advisors(a -> a.param(CONVERSATION_ID, chatId).param(TOP_K, memoryConfig.getTopK()))
                     .call()
@@ -205,20 +207,24 @@ public class CustomerSupportAssistant {
     private Map<String, Object> buildSystemParams(UserContext userContext) {
         Map<String, Object> params = new HashMap<>();
 
-        // 添加用户上下文信息
+        // 添加用户上下文信息 - 使用系统提示模板所需的变量名
         if (userContext != null) {
-            // 若 UserContext 未来扩展了对应方法再打开
-            // params.put("userName", userContext.getUserName());
-            // params.put("userPlan", userContext.getUserPlan());
-            // params.put("userRegion", userContext.getUserRegion());
+            params.put("user_name", userContext.getUserName());
+            params.put("available_credit", userContext.getAvailableCredit());
+            params.put("current_loan_plan", userContext.getCurrentLoanPlan());
+            params.put("recent_repayment_status", userContext.getRecentRepaymentStatus());
+            params.put("max_loan_amount", userContext.getMaxLoanAmount());
+        } else {
+            // 使用默认值，确保模板变量都能被替换
+            params.put("user_name", "尊敬的客户");
+            params.put("available_credit", 10000.0);
+            params.put("current_loan_plan", "无");
+            params.put("recent_repayment_status", "正常");
+            params.put("max_loan_amount", 50000.0);
         }
 
         // 添加时间工具
-        // params.put("currentTime", TimeTools.getCurrentTime());
-        // params.put("currentDate", TimeTools.getCurrentDate());
-
-        // 添加天气工具
-        // params.put("currentWeather", WeatherTools.getCurrentWeather());
+        params.put("current_time", java.time.LocalDateTime.now().toString());
 
         return params;
     }
