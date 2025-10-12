@@ -10,7 +10,7 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.spring.ai.tutorial.rag</groupId>
+    <groupId>com.spring.ai.app.rag</groupId>
     <artifactId>rag-elasticsearch</artifactId>
 
     <properties>

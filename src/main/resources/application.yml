@@ -10,10 +10,8 @@ spring:
 
 logging:
   level:
-    com.spring.ai.tutorial.rag.transformer.ContextualRewriteQueryTransformer: DEBUG
-    com.spring.ai.tutorial.rag.services.CustomerSupportAssistant: INFO
-    com.spring.ai.tutorial.rag.config.ObservationConfiguration: INFO
-
-              
+    com.spring.ai.app.rag.transformer.ContextualRewriteQueryTransformer: DEBUG
+    com.spring.ai.app.rag.services.CustomerSupportAssistant: INFO
+    com.spring.ai.app.rag.config.ObservationConfiguration: INFO
 
 
