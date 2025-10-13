@@ -122,7 +122,7 @@ function App() {
           purpose || null
         ].filter(Boolean).join(' · ');
         addAssistantMessage(`好的，已确认借款请求${summary ? `（${summary}）` : ''}，我们会尽快为您办理。`);
-        message.success('已提交借款申请');
+        message.success('您已提交借款申请');
         return;
       }
       // 调用后端完成当前步骤
@@ -425,7 +425,7 @@ function App() {
                     const val = e.target.value;
                     setConfig({ ...config, authorizationStatus: val });
                     // 不再调用后端授权更新接口；该状态仅作为聊天上下文参数传递给后端
-                    message.info('已更新授信状态：该设置会在聊天请求中传递给后端');
+                    // message.info('已更新授信状态：该设置会在聊天请求中传递给后端');
                   }}
                   className="config-input"
                 >
