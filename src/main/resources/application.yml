@@ -10,8 +10,14 @@ spring:
 
 logging:
   level:
+    root: INFO
+    org.springframework.boot.autoconfigure: WARN
+    org.springframework.boot.actuate: WARN
+    org.springframework.boot: WARN
+    org.springframework: WARN
     com.spring.ai.app.rag.transformer.ContextualRewriteQueryTransformer: DEBUG
     com.spring.ai.app.rag.services.CustomerSupportAssistant: INFO
     com.spring.ai.app.rag.config.ObservationConfiguration: INFO
+    com.spring.ai.app.rag.controller: DEBUG
 
 

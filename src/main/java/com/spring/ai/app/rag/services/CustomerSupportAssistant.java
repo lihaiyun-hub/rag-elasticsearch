@@ -1,18 +1,14 @@
-
-
 package com.spring.ai.app.rag.services;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.ai.app.rag.config.MemoryConfig;
-import com.spring.ai.app.rag.flow.ChatResponse;
-import com.spring.ai.app.rag.flow.IntentExtractor;
+import com.spring.ai.app.rag.flow.*;
 import com.spring.ai.app.rag.security.PromptInjectionFilter;
 import com.spring.ai.app.rag.security.ResponseSecurityMonitor;
 import com.spring.ai.app.rag.security.SecurityAuditLogger;
 import com.spring.ai.app.rag.tools.ChangePlanTools;
 import com.spring.ai.app.rag.tools.TimeTools;
 import com.spring.ai.app.rag.tools.WeatherTools;
-import com.spring.ai.app.rag.flow.IntentRouter;
 import com.spring.ai.app.rag.model.UserContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +45,7 @@ public class CustomerSupportAssistant {
     private final SecurityAuditLogger auditLogger;
     private final IntentExtractor intentExtractor;
     private final IntentRouter intentRouter;
+    private final ConsumerCreditService consumerCreditService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public CustomerSupportAssistant(Resource systemPromptResource,
@@ -62,8 +59,8 @@ public class CustomerSupportAssistant {
                                     ResponseSecurityMonitor responseSecurityMonitor,
                                     SecurityAuditLogger auditLogger,
                                     IntentExtractor intentExtractor,
-                                    IntentRouter intentRouter) throws IOException {
-        // @formatter:off
+                                    IntentRouter intentRouter,
+                                    ConsumerCreditService consumerCreditService) throws IOException {
         var builder = modelBuilder
                 .defaultSystem(systemPromptResource)
                 .defaultTools( new ChangePlanTools(),new WeatherTools(),new TimeTools())
@@ -86,6 +83,7 @@ public class CustomerSupportAssistant {
         this.auditLogger = auditLogger;
         this.intentExtractor = intentExtractor;
         this.intentRouter = intentRouter;
+        this.consumerCreditService = consumerCreditService;
         // @formatter:on
     }
 
@@ -110,9 +108,7 @@ public class CustomerSupportAssistant {
         return formatted.toString();
     }
 
-    public String chat(String chatId, String userMessageContent) {
-        return chat(chatId, userMessageContent, null);
-    }
+
 
     public String chat(String chatId, String userMessageContent, UserContext userContext) {
         // 获取用户ID（从userContext或chatId）
@@ -121,11 +117,31 @@ public class CustomerSupportAssistant {
         try {
             // ==== 零侵入式多流程路由 ====
             var intent = intentExtractor.extract(userMessageContent);
-            if (intent.confidence() >= 0.85 && !"UNKNOWN".equals(intent.intent())) {
-                ChatResponse flowResp = intentRouter.route(chatId, intent);
-                if (flowResp != null) return objectMapper.writeValueAsString(flowResp);
+
+            // ==== 消费贷授信流程 ====
+            if ("CONSUMER_LOAN".equals(intent.intent())) {
+                Boolean authorized = userContext != null ? userContext.getAuthorized() : null;
+                if (Boolean.TRUE.equals(authorized)) {
+                    // 已授信，直接推送借款方案卡片（前端兼容：offer 以 JSON 字符串提供）
+                    Map<String,String> payload = new HashMap<>();
+                    payload.put("action","confirm_loan");
+                    payload.put("label","确认借款");
+                    payload.put("change_action","change_plan");
+                    payload.put("change_label","更换方案");
+                    // 将借款方案以 JSON 字符串嵌入 payload.offer，前端解析后用于渲染
+                    payload.put("offer", "{\"amount\":48000,\"annualRate\":14.4,\"termMonths\":12,\"repayMode\":\"每期等本\",\"firstPayment\":4614.40,\"totalInterest\":3832.00,\"bankName\":\"网商银行\",\"bankTail\":\"5386\",\"lender\":\"福建海峡银行\",\"discountText\":\"查看优惠\",\"purpose\":\"消费购物\"}");
+                    Card loanCard = new Card("consumer_loan_offers", "为您推荐以下消费贷方案", "多款额度可选，随借随还","intent",payload);
+                    ChatResponse resp = new ChatResponse("card_list",List.of(loanCard),"CREDIT_DONE",
+                            "");
+                    return objectMapper.writeValueAsString(resp);
+                } else {
+                    // 未授信或未提供授权状态：统一通过状态机启动流程，避免出现“未知步骤”
+                    consumerCreditService.initIfAbsent(chatId);
+                    IntentResult ir = new IntentResult("CONSUMER_CREDIT", 0.9, Map.of(), null);
+                    ChatResponse resp = intentRouter.route(chatId, ir);
+                    return objectMapper.writeValueAsString(resp);
+                }
             }
-            // ============================
 
             // 2. 输入安全检查
             PromptInjectionFilter.DetectionResult injectionResult =

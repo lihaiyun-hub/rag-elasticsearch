@@ -26,7 +26,12 @@ public class RagEsApplication {
     private static final DataFormatter DATA_FORMATTER = new DataFormatter();
 
     public static void main(String[] args) {
-        SpringApplication.run(RagEsApplication.class, args);
+        try {
+            SpringApplication.run(RagEsApplication.class, args);
+        } catch (Exception e) {
+            logger.error("Application failed to start", e);
+            throw e;
+        }
     }
 
     // @Bean

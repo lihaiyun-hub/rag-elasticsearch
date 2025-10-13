@@ -11,6 +11,7 @@ public class UserContext {
     private String currentLoanPlan;
     private String recentRepaymentStatus;
     private double maxLoanAmount;
+    private Boolean authorized; // 授信状态：null 表示未提供；true/false 表示显式状态
 
     public UserContext() {
         // 默认值
@@ -19,6 +20,7 @@ public class UserContext {
         this.currentLoanPlan = "无";
         this.recentRepaymentStatus = "正常";
         this.maxLoanAmount = 50000.0;
+        this.authorized = null;
     }
 
     public UserContext(String userName, double availableCredit, String currentLoanPlan,
@@ -28,6 +30,7 @@ public class UserContext {
         this.currentLoanPlan = currentLoanPlan;
         this.recentRepaymentStatus = recentRepaymentStatus;
         this.maxLoanAmount = maxLoanAmount;
+        this.authorized = null;
     }
 
     // Getters and Setters
@@ -71,6 +74,14 @@ public class UserContext {
         this.maxLoanAmount = maxLoanAmount;
     }
 
+    public Boolean getAuthorized() {
+        return authorized;
+    }
+
+    public void setAuthorized(Boolean authorized) {
+        this.authorized = authorized;
+    }
+
     @Override
     public String toString() {
         return "UserContext{" +
@@ -79,6 +90,7 @@ public class UserContext {
                 ", currentLoanPlan='" + currentLoanPlan + '\'' +
                 ", recentRepaymentStatus='" + recentRepaymentStatus + '\'' +
                 ", maxLoanAmount=" + maxLoanAmount +
+                ", authorized=" + authorized +
                 '}';
     }
 }

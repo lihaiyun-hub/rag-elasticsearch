@@ -1,0 +1,297 @@
+.App {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0;
+}
+
+.progress-container {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.step-card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  margin-bottom: 20px;
+}
+
+.step-content h3 {
+  color: #1890ff;
+  margin-bottom: 16px;
+  font-size: 20px;
+}
+
+.step-content p {
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+/* 步骤卡片样式 */
+.ant-steps-item-process .ant-steps-item-icon {
+  background: #1890ff;
+  border-color: #1890ff;
+}
+
+.ant-steps-item-finish .ant-steps-item-icon {
+  background: #52c41a;
+  border-color: #52c41a;
+}
+
+/* 表单样式优化 */
+.ant-form-item-label > label {
+  font-weight: 500;
+  color: #333;
+}
+
+.ant-input, .ant-select-selector {
+  border-radius: 6px !important;
+}
+
+.ant-btn-primary {
+  border-radius: 6px;
+  height: 40px;
+  font-weight: 500;
+}
+
+/* 上传组件样式 */
+.ant-upload-list-item {
+  border-radius: 6px;
+}
+
+/* 成功页面样式 */
+.success-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.offer-card .ant-card-actions {
+  background: #fafafa;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* 进度条动画 */
+@keyframes loading {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .container {
+    padding: 10px;
+  }
+  
+  .progress-container {
+    padding: 16px;
+  }
+  
+  .step-card {
+    padding: 16px;
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .action-buttons .ant-btn {
+    width: 100%;
+  }
+}
+
+/* 加载动画 */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.loading-container .ant-spin {
+  color: white;
+}
+
+.loading-container .ant-spin-text {
+  color: white;
+  font-size: 16px;
+}
+
+/* 错误页面样式 */
+.error-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.error-container .ant-card {
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+/* 标签样式 */
+.ant-tag-blue {
+  background: #e6f7ff;
+  border-color: #91d5ff;
+  color: #1890ff;
+}
+
+/* 卡片悬停效果 */
+.offer-card {
+  transition: all 0.3s ease;
+}
+
+.offer-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+/* 响应式步骤条 */
+@media (max-width: 576px) {
+  .ant-steps-horizontal.ant-steps-small .ant-steps-item-container {
+    padding-left: 8px;
+  }
+  
+  .ant-steps-horizontal.ant-steps-small .ant-steps-item-title {
+    font-size: 12px;
+  }
+}
+
+.container.layout {
+  display: flex;
+  gap: 16px;
+  min-height: calc(100vh - 0px);
+}
+
+.sidebar {
+  width: 360px;
+  flex: 0 0 360px;
+}
+
+.main {
+  flex: 1 1 auto;
+}
+
+.config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.config-row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  align-items: center;
+  column-gap: 8px;
+}
+
+.config-label {
+  width: 180px;
+  font-size: 12px;
+  color: #666;
+  display: inline-flex; /* 文本与图标并排，图标紧挨着变量名 */
+  align-items: flex-start;
+  position: static; /* 覆盖之前的相对定位 */
+  padding-right: 0; /* 取消为图标预留的右侧空间 */
+}
+
+.label-info {
+  display: inline-block;
+  margin-left: 6px; /* 紧贴变量名右侧 */
+  color: #bfbfbf;
+  cursor: help;
+  font-size: 14px;
+  position: relative;
+  transform: translateY(-2px); /* 微调到变量名的右上角 */
+}
+.label-info:hover {
+  color: #8c8c8c;
+}
+.config-input {
+  width: 100%;
+  height: 32px;
+  padding: 6px 10px;
+  box-sizing: border-box;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  background-color: #fff;
+}
+
+.config-input select,
+select.config-input {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+.config-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.config-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.input-action-button {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0;
+  height: 22px;
+  line-height: 22px;
+  display: inline-flex;
+  align-items: center;
+  color: #595959;
+}
+
+.input-action-button:hover {
+  color: #1890ff;
+}
+.sidebar .ant-card {
+  position: relative;
+}
+
+.card-info {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  color: #8c8c8c;
+  cursor: pointer;
+  z-index: 2;
+}
+.card-info:hover {
+  color: #595959;
+}
+
+/* 旧的标签右侧图标样式保留（当前不使用），以便复用 */
+.info-icon {
+  margin-left: 6px;
+  font-size: 14px;
+  color: #bfbfbf;
+}
+.info-icon:hover {
+  color: #8c8c8c;
+}
