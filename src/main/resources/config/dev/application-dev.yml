@@ -62,6 +62,22 @@ spring:
         model: BAAI/bge-reranker-v2-m3
         timeout-ms: 3000
         api-key: "sk-vcqgdvzbcchptznjpgcsyrfzrclvuvsidsrdpoyadgzgmtpg"
+      # 增强前置RAG配置 - 高阶方案D
+      enhanced:
+        enabled: true
+        multi-recall:
+          enabled: true
+          top-k: 15              # 多路召回总数
+        rerank:
+          enabled: true
+          top-k: 8               # 重排序后保留数量
+        query-expansion:
+          enabled: true
+          max-expansions: 3      # 最大查询扩展数量
+          use-llm: true          # 启用LLM查询扩展
+          use-rules: true        # 启用规则查询扩展
+        intent-slot:
+          enabled: true          # 启用统一意图槽位抽取
   elasticsearch:
     uris: http://127.0.0.1:9200
     username: elastic

@@ -9,7 +9,7 @@ import java.util.List;
 public class UserContext {
 
     private String userName;
-    private double availableCredit;
+    private Double availableCredit;
     // currentLoanPlan 字段已移除
     private String recentRepaymentStatus;
     private Boolean authorized; // 授信状态：null 表示未提供；true/false 表示显式状态
@@ -26,7 +26,7 @@ public class UserContext {
         this.authorized = null;
     }
 
-    public UserContext(String userName, double availableCredit,
+    public UserContext(String userName, Double availableCredit,
                        String recentRepaymentStatus) {
         this.userName = userName;
         this.availableCredit = availableCredit;
@@ -43,11 +43,11 @@ public class UserContext {
         this.userName = userName;
     }
 
-    public double getAvailableCredit() {
+    public Double getAvailableCredit() {
         return availableCredit;
     }
 
-    public void setAvailableCredit(double availableCredit) {
+    public void setAvailableCredit(Double availableCredit) {
         this.availableCredit = availableCredit;
     }
 
