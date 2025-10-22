@@ -15,7 +15,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [stepData, setStepData] = useState(null);
   const [authorized, setAuthorized] = useState(false);
-  const [error, setError] = useState(null);
+  const [error] = useState(null);
   const [messages, setMessages] = useState([]);
   const [stepHistory, setStepHistory] = useState([]);
 
@@ -26,11 +26,15 @@ function App() {
   const defaultConfig = {
     startStep: 1,
     userName: 'John Doe',
-    availableCredit: '5000',
-    currentLoanPlan: '无',
+    availableCredit: '',
+    // currentLoanPlan: '无', // 已移除
     recentRepaymentStatus: '正常',
-    maxLoanAmount: '20000',
-    authorizationStatus: '未授信'
+    authorizationStatus: '未授信',
+    // 新增可配置项默认值
+    termOptions: '6,12,24,36',
+    loanPurposes: '日常消费,教育培训,医疗健康,家庭装修,旅游出行,数码家电,其他',
+    bankCardNumber: '6222020000006666',
+    bankName: '招商银行'
   };
   const [config, setConfig] = useState(defaultConfig);
   // 卡片键、名称与提示
@@ -73,38 +77,29 @@ function App() {
     setMessages([]);
   }, []);
 
-  const addAssistantMessage = (content) => {
-    setMessages((prev) => [...prev, { role: 'assistant', content }]);
+  // 未授信时清空可用额度并在UI中禁用输入
+  useEffect(() => {
+    // 根据授权状态自动调整额度：未授信清空；已授信且为空则设置默认值
+    setConfig(prev => {
+      if (config.authorizationStatus !== '已授信' && prev.availableCredit !== '') {
+        return { ...prev, availableCredit: '' };
+      }
+      if (config.authorizationStatus === '已授信' && (prev.availableCredit === '' || prev.availableCredit == null)) {
+        return { ...prev, availableCredit: '5000' };
+      }
+      return prev;
+    });
+  }, [config.authorizationStatus]);
+
+  const addAssistantMessage = (content, card = null) => {
+    setMessages((prev) => [...prev, { role: 'assistant', content, ...(card ? { card } : {}) }]);
   };
   const addUserMessage = (content) => {
     setMessages((prev) => [...prev, { role: 'user', content }]);
   };
 
 
-  const initializeCreditProcess = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const startStep = Number(config.startStep) || 1;
-      const response = await consumerCreditAPI.startCreditProcess(chatId, startStep);
-      if (response.data && response.data.card) {
-        const card = response.data.card;
-        setStepData(card);
-        setCurrentStep(0);
-        setAuthorized(false);
-        setStepHistory([card]);
-        const key = getCardKey(card);
-        addAssistantMessage(`${getCardName(key)}开始。${getCardTip(key)}`);
-      } else {
-        throw new Error('响应格式错误：缺少card字段');
-      }
-    } catch (error) {
-      setError('初始化授信流程失败');
-      message.error('初始化授信流程失败');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // 初始化授信流程方法已移除（原仅由欢迎卡片触发）
 
   const handleStepComplete = async (formData) => {
     try {
@@ -130,17 +125,22 @@ function App() {
       if (response.data && response.data.card) {
         const nextCard = response.data.card;
         const nextKey = getCardKey(nextCard);
-        // 记录步骤完成状态
-        addAssistantMessage(`已完成【${getCardName(currKey)}】。即将进入【${getCardName(nextKey)}】。${getCardTip(nextKey)}`);
+        // 将下一步卡片与说明合并为单条助手消息
+        const tipText = `已完成【${getCardName(currKey)}】。即将进入【${getCardName(nextKey)}】。${getCardTip(nextKey)}`;
         // 检查是否完成
         if (nextCard.state === 'COMPLETED' || nextCard.state === 'CREDIT_DONE' || nextKey === 'consumer_loan_offers') {
           setAuthorized(true);
-          // 已移除弹窗：message.success('授信申请已通过！');
+          setStepData(nextCard);
+          setCurrentStep(0);
+          setStepHistory([nextCard]);
+          const doneText = '授信已完成，以下为为您推荐的借款方案';
+          addAssistantMessage(doneText, nextCard);
         } else {
           // 进入下一步
           setStepData(nextCard);
           setCurrentStep((s) => s + 1);
           setStepHistory((h) => [...h, nextCard]);
+          addAssistantMessage(tipText, nextCard);
           message.success('步骤完成，进入下一步');
         }
       } else {
@@ -199,43 +199,58 @@ function App() {
     // 删除前端意图识别，统一由后端进行意图判断与流程路由
     try {
       setLoading(true);
+      // 解析 termOptions（支持逗号分隔字符串或数组）
+      const parsedTermOptions = typeof config.termOptions === 'string'
+        ? config.termOptions.split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isFinite(n) && n > 0)
+        : (Array.isArray(config.termOptions) ? config.termOptions : undefined);
+      // 解析 loanPurposes（支持逗号分隔字符串或数组）
+      const parsedLoanPurposes = typeof config.loanPurposes === 'string'
+        ? config.loanPurposes.split(',').map(s => s.trim()).filter(s => s.length > 0)
+        : (Array.isArray(config.loanPurposes) ? config.loanPurposes : undefined);
       const reply = await assistantAPI.chat(chatId, text, {
         userName: config.userName || undefined,
-        availableCredit: config.availableCredit !== '' ? Number(config.availableCredit) : undefined,
-        currentLoanPlan: config.currentLoanPlan || undefined,
+        // 仅在已授信时传递可用额度
+        availableCredit: (config.authorizationStatus === '已授信' && config.availableCredit !== '') ? Number(config.availableCredit) : undefined,
+        // currentLoanPlan: config.currentLoanPlan || undefined, // 已移除
         recentRepaymentStatus: config.recentRepaymentStatus || undefined,
-        maxLoanAmount: config.maxLoanAmount !== '' ? Number(config.maxLoanAmount) : undefined,
-        authorized: config.authorizationStatus === '已授信'
+        authorized: config.authorizationStatus === '已授信',
+        // 可选分期数：若在 config.termOptions 中提供（数组），则传递给后端用于方案期数选择
+        termOptions: (parsedTermOptions && parsedTermOptions.length > 0) ? parsedTermOptions : undefined,
+        // 新增：用途选项传递到后端用于系统提示词注入
+        loanPurposes: (parsedLoanPurposes && parsedLoanPurposes.length > 0) ? parsedLoanPurposes : undefined,
+        // 新增：银行卡号与银行名
+        bankCardNumber: (config.bankCardNumber && config.bankCardNumber.trim() !== '') ? config.bankCardNumber.trim() : undefined,
+        bankName: (config.bankName && config.bankName.trim() !== '') ? config.bankName.trim() : undefined
       });
       // 适配结构化返回：优先渲染文本，其次根据card决定是否渲染步骤卡片或切换到授信完成页
       if (reply && typeof reply === 'object') {
         const { text: botText, card } = reply;
-        if (botText) {
-          addAssistantMessage(botText);
-        }
         if (card) {
           const key = getCardKey(card);
           // 忽略纯文本/错误卡片
           if (key && key !== 'text_response' && key !== 'error') {
-            // 授信已完成：在聊天窗口渲染借款方案卡片
+            setStepData(card);
+            setCurrentStep(0);
+            setStepHistory([card]);
             if (key === 'consumer_loan_offers' || card.state === 'CREDIT_DONE' || card.state === 'COMPLETED') {
               setAuthorized(true);
-              setStepData(card);
-              setCurrentStep(0);
-              setStepHistory([card]);
-              // 优化：仅在无文本回复时补充一条提示，避免重复机器人文案
-              if (!botText) {
-                addAssistantMessage('授信已完成，以下为为您推荐的借款方案');
-              }
-              // 已移除弹窗：message.success('授信申请已通过！');
+              const textMsg = botText || '授信已完成，以下为为您推荐的借款方案';
+              addAssistantMessage(textMsg, card);
             } else {
-              // 渲染流程步骤卡片到聊天窗口
-              setStepData(card);
-              setCurrentStep(0);
-              setStepHistory([card]);
-              addAssistantMessage(`${getCardName(key)}开始。${getCardTip(key)}`);
+              const textMsg = botText || `${getCardName(key)}开始。${getCardTip(key)}`;
+              addAssistantMessage(textMsg, card);
             }
+          } else if (botText) {
+            addAssistantMessage(botText);
+          } else {
+            // 结构化响应但无可展示文本/卡片时的兜底文案
+            addAssistantMessage('我已经收到你的请求，但暂时没有可展示的回复。试试换个问法或提供更多信息。');
           }
+        } else if (botText) {
+          addAssistantMessage(botText);
+        } else {
+          // 对象响应但无文本且无卡片时的兜底
+          addAssistantMessage('我暂时没有准备好回答这个问题，请稍后再试。');
         }
       } else {
         // 兼容后端返回纯字符串的情况
@@ -267,18 +282,12 @@ function App() {
     setStepData(prevCard);
     setCurrentStep((s) => (s > 0 ? s - 1 : 0));
     const prevKey = getCardKey(prevCard);
-    addAssistantMessage(`已返回到【${getCardName(prevKey)}】。${getCardTip(prevKey)}`);
+    addAssistantMessage(`已返回到【${getCardName(prevKey)}】。${getCardTip(prevKey)}`, prevCard);
   };
 
   const canRollback = stepHistory.length > 1 && !loading && !authorized;
 
-  const handleStartCredit = async () => {
-    if (loading || authorized) return;
-    if (!stepData) {
-      addAssistantMessage('好的，正在为您开启授信流程。');
-      await initializeCreditProcess();
-    }
-  };
+  // 已移除通过欢迎卡片触发的“开始授信流程”入口
 
   if (error) {
     return (
@@ -365,25 +374,22 @@ function App() {
               <div className="config-row">
                 <span className="config-label">
                   Available Credit
-                  <Tooltip title="当前可用信用额度（单位：元），用于生成推荐方案">
+                  <Tooltip title="仅在已授信状态下可填写的可用额度（单位：元）">
                     <InfoCircleOutlined className="label-info" />
                   </Tooltip>
                 </span>
-                <input type="number" min={0} step={1} value={config.availableCredit}
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={config.availableCredit}
                   onChange={(e) => setConfig({ ...config, availableCredit: e.target.value })}
-                  className="config-input" />
+                  className="config-input"
+                  placeholder={config.authorizationStatus === '已授信' ? '请输入额度，如 5000' : '未授信不可用'}
+                  disabled={config.authorizationStatus !== '已授信'}
+                />
               </div>
-              <div className="config-row">
-                <span className="config-label">
-                  Current Loan Plan
-                  <Tooltip title="当前已选贷款方案（可为空），仅用于上下文展示">
-                    <InfoCircleOutlined className="label-info" />
-                  </Tooltip>
-                </span>
-                <input type="text" value={config.currentLoanPlan}
-                  onChange={(e) => setConfig({ ...config, currentLoanPlan: e.target.value })}
-                  className="config-input" />
-              </div>
+              {/* 已移除 currentLoanPlan 输入行 */}
               <div className="config-row">
                 <span className="config-label">
                   Recent Repayment Status
@@ -403,30 +409,14 @@ function App() {
               </div>
               <div className="config-row">
                 <span className="config-label">
-                  Max Loan Amount
-                  <Tooltip title="系统允许的最高可贷额度（单位：元），用于推荐方案上限">
-                    <InfoCircleOutlined className="label-info" />
-                  </Tooltip>
-                </span>
-                <input type="number" min={0} step={1} value={config.maxLoanAmount}
-                  onChange={(e) => setConfig({ ...config, maxLoanAmount: e.target.value })}
-                  className="config-input" />
-              </div>
-              <div className="config-row">
-                <span className="config-label">
-                  授信状态
-                  <Tooltip title="当前是否已完成授信：已授信将直接展示借款方案，未授信进入授信流程">
+                  Authorization Status
+                  <Tooltip title="是否已完成授信，仅用于上下文展示">
                     <InfoCircleOutlined className="label-info" />
                   </Tooltip>
                 </span>
                 <select
                   value={config.authorizationStatus}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setConfig({ ...config, authorizationStatus: val });
-                    // 不再调用后端授权更新接口；该状态仅作为聊天上下文参数传递给后端
-                    // message.info('已更新授信状态：该设置会在聊天请求中传递给后端');
-                  }}
+                  onChange={(e) => setConfig({ ...config, authorizationStatus: e.target.value })}
                   className="config-input"
                 >
                   {AUTH_STATUS_OPTIONS.map((opt) => (
@@ -434,9 +424,56 @@ function App() {
                   ))}
                 </select>
               </div>
-            </div>
-            <div className="config-actions">
-              <Button onClick={handleResetConfig}>Reset</Button>
+              {/* 新增配置项：分期、银行名、银行卡号 */}
+              <div className="config-row">
+                <span className="config-label">
+                  Term Options
+                  <Tooltip title="可选分期（以逗号分隔，如 6,12,24,36）">
+                    <InfoCircleOutlined className="label-info" />
+                  </Tooltip>
+                </span>
+                <input type="text" value={config.termOptions}
+                  onChange={(e) => setConfig({ ...config, termOptions: e.target.value })}
+                  className="config-input" />
+              </div>
+              <div className="config-row">
+                <span className="config-label">
+                  Loan Purposes
+                  <Tooltip title="借款用途选项（以逗号分隔，如 日常消费,教育培训,医疗健康）">
+                    <InfoCircleOutlined className="label-info" />
+                  </Tooltip>
+                </span>
+                <input type="text" value={config.loanPurposes}
+                  onChange={(e) => setConfig({ ...config, loanPurposes: e.target.value })}
+                  className="config-input" />
+              </div>
+              <div className="config-row">
+                <span className="config-label">
+                  Bank Name
+                  <Tooltip title="银行名称，如 招商银行、中国银行">
+                    <InfoCircleOutlined className="label-info" />
+                  </Tooltip>
+                </span>
+                <input type="text" value={config.bankName}
+                  onChange={(e) => setConfig({ ...config, bankName: e.target.value })}
+                  className="config-input" />
+              </div>
+              <div className="config-row">
+                <span className="config-label">
+                  Bank Card Number
+                  <Tooltip title="银行卡号仅用于计算尾号展示，完整号码不会在界面显示或传输给未授权模块">
+                    <InfoCircleOutlined className="label-info" />
+                  </Tooltip>
+                </span>
+                <input type="text" value={config.bankCardNumber}
+                  onChange={(e) => setConfig({ ...config, bankCardNumber: e.target.value })}
+                  className="config-input" />
+              </div>
+              <div className="config-actions">
+                <Button onClick={handleResetConfig} disabled={loading}>
+                  重置配置
+                </Button>
+              </div>
             </div>
           </Card>
         </div>
@@ -452,7 +489,6 @@ function App() {
             onRollback={handleRollback}
             onRestart={handleRestart}
             canRollback={canRollback}
-            onStartCredit={handleStartCredit}
             onAssistantReply={null}
           />
           {/* 纯聊天窗口模式：隐藏进度条 */}

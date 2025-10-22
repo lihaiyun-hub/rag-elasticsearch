@@ -120,11 +120,7 @@ export const consumerCreditAPI = {
       throw error;
     }
   },
-  // setAuthorization: async (chatId, authorized) => {
-  //   // 前端不再直接调用后端更新授权状态；统一通过聊天请求上下文传递
-  //   const response = await api.post('/consumer-credit/authorize', { chatId, authorized });
-  //   return response.data;
-  // },
+
 };
 
 // 助手通用聊天API
@@ -143,13 +139,16 @@ export const assistantAPI = {
         userMessage,
       };
       if (context) {
-        const { userName, availableCredit, currentLoanPlan, recentRepaymentStatus, maxLoanAmount, authorized } = context;
+        const { userName, availableCredit, recentRepaymentStatus, authorized, termOptions, loanPurposes, bankCardNumber, bankName } = context;
         if (userName) body.userName = userName;
         if (availableCredit != null) body.availableCredit = availableCredit;
-        if (currentLoanPlan) body.currentLoanPlan = currentLoanPlan;
         if (recentRepaymentStatus) body.recentRepaymentStatus = recentRepaymentStatus;
-        if (maxLoanAmount != null) body.maxLoanAmount = maxLoanAmount;
         if (authorized != null) body.authorized = authorized;
+        if (Array.isArray(termOptions) && termOptions.length > 0) body.termOptions = termOptions;
+        if (Array.isArray(loanPurposes) && loanPurposes.length > 0) body.loanPurposes = loanPurposes;
+        // 新增：银行卡后四位与银行名传递到后端
+        if (typeof bankCardNumber === 'string' && bankCardNumber.trim() !== '') body.bankCardNumber = bankCardNumber.trim();
+        if (typeof bankName === 'string' && bankName.trim() !== '') body.bankName = bankName.trim();
       }
       const response = await api.post('/assistant/chat', body);
       const data = response.data;
@@ -160,7 +159,6 @@ export const assistantAPI = {
       } else if (data && typeof data === 'object') {
         const card = data?.data?.card;
         if (card) {
-          // 兼容后端 payload.offer 以字符串形式返回：解析为对象并提升为 card.offer
           if (card.payload && typeof card.payload.offer === 'string') {
             try {
               const parsed = JSON.parse(card.payload.offer);
@@ -179,7 +177,6 @@ export const assistantAPI = {
         } else if (data.message && typeof data.message === 'string') {
           textReply = data.message;
         } else {
-          // 无明确文本时不再返回JSON字符串，避免在聊天窗显示原始结构
           textReply = '';
         }
       } else {

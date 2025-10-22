@@ -50,7 +50,6 @@ public class ConsumerCreditService {
      */
     public int getCurrentStep(String userId) {
         int step = stepMap.getOrDefault(userId, 0);
-        log.info("getCurrentStep userId={} step={}", userId, step);
         return step;
     }
 

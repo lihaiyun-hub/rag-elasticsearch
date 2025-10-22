@@ -71,12 +71,12 @@ public class RerankService {
                     .timeout(Duration.ofMillis(timeoutMs))
                     .block();
             if (!StringUtils.hasText(response)) {
-                logger.warn(" reranker returned empty response");
+                logger.warn("reranker returned empty response");
                 return Collections.emptyList();
-            }
+            }       
             RerankResponse rerankResponse = objectMapper.readValue(response, RerankResponse.class);
             if (rerankResponse.results == null) {
-                logger.warn(" reranker response has no results");
+                logger.warn("reranker response has no results");
                 return Collections.emptyList();
             }
             List<ResultItem> items = new ArrayList<>();

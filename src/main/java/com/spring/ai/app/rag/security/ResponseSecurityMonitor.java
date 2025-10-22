@@ -102,7 +102,7 @@ public class ResponseSecurityMonitor {
         // 确保风险分数不超过1.0
         riskScore = Math.min(riskScore, 1.0);
         
-        boolean isSafe = riskScore < 0.7; // 0.7以下为安全（放宽阈值）
+        boolean isSafe = riskScore < 0.95; // 0.95以下为安全（进一步放宽阈值）
         String reason = issues.length() > 0 ? issues.toString() : "响应安全";
         
         if (!isSafe) {
@@ -124,7 +124,7 @@ public class ResponseSecurityMonitor {
         
         String input = originalInput.toLowerCase().trim();
         
-        // 检查响应是否包含完整的用户输入（可能被用于证明攻击成功）
+        // 检查响应是否包含完整的用户输入
         if (response.contains(input) && input.length() > 10) {
             return true;
         }
@@ -202,6 +202,11 @@ public class ResponseSecurityMonitor {
      * 检查是否偏离了贷款主题
      */
     private boolean isOffTopic(String originalInput, String response) {
+        // 如果原始输入为空，直接返回false，不检查偏离主题
+        if (originalInput == null || originalInput.trim().isEmpty()) {
+            return false;
+        }
+        
         // 简单的问候语不认为是偏离主题
         String[] greetings = {
             "你好", "您好", "hi", "hello", "早上好", "下午好", "晚上好",
@@ -238,7 +243,21 @@ public class ResponseSecurityMonitor {
         }
         
         // 如果没有贷款相关词汇，认为偏离主题（但降低风险分数）
-        return loanWordCount == 0;
+        // 放宽检查：只要有任何金融相关词汇就不算偏离主题
+        String[] financeKeywords = {
+            "money", "钱", "cash", "现金", "bank", "银行",
+            "financial", "金融", "investment", "投资", "payment", "支付"
+        };
+        
+        int financeWordCount = 0;
+        for (String keyword : financeKeywords) {
+            if (response.contains(keyword)) {
+                financeWordCount++;
+            }
+        }
+        
+        // 如果既没有贷款词汇也没有金融词汇，才认为偏离主题
+        return loanWordCount == 0 && financeWordCount == 0;
     }
     
     /**

@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Card, Input, Button, List, Spin, Avatar, Alert } from 'antd';
-import { RobotOutlined, RollbackOutlined, ReloadOutlined, CreditCardOutlined, ThunderboltOutlined, PlusOutlined, AudioOutlined, ArrowUpOutlined } from '@ant-design/icons';
+import { Card, Input, Button, List, Avatar } from 'antd';
+import { RobotOutlined, RollbackOutlined, ReloadOutlined, PlusOutlined, ArrowUpOutlined } from '@ant-design/icons';
 import CreditStepCard from './CreditStepCard';
 
-const ChatWindow = ({ messages = [], onSend, loading, stepData, onComplete, onRollback, onRestart, canRollback, onStartCredit, onAssistantReply }) => {
+const ChatWindow = ({ messages = [], onSend, loading, stepData, onComplete, onRollback, onRestart, canRollback, onAssistantReply }) => {
   const [input, setInput] = useState('');
   const listRef = useRef(null);
 
@@ -25,7 +25,7 @@ const ChatWindow = ({ messages = [], onSend, loading, stepData, onComplete, onRo
   };
 
   const bubbleStyle = (isUser) => ({
-    maxWidth: '75%',
+    maxWidth: '85%',
     background: isUser ? '#1890ff' : '#fff',
     color: isUser ? '#fff' : '#333',
     border: isUser ? 'none' : '1px solid #f0f0f0',
@@ -33,33 +33,6 @@ const ChatWindow = ({ messages = [], onSend, loading, stepData, onComplete, onRo
     padding: '10px 12px',
     boxShadow: isUser ? 'none' : '0 1px 3px rgba(0,0,0,0.04)'
   });
-
-  const renderWelcome = () => (
-    <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '8px 0', gap: 8 }}>
-      <Avatar size={28} icon={<RobotOutlined />} />
-      <div style={{ maxWidth: '75%' }}>
-        <Alert
-          type="info"
-          message="欢迎使用智能助手"
-          description={
-            <div>
-              <div style={{ marginBottom: 8 }}>我可以帮助你：咨询问题、查询信息、以及在需要时办理授信流程。</div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <Button type="primary" icon={<CreditCardOutlined />} size="small" onClick={onStartCredit} disabled={loading}>
-                  开始授信流程
-                </Button>
-                <Button icon={<ThunderboltOutlined />} size="small" disabled>
-                  更多功能（敬请期待）
-                </Button>
-              </div>
-            </div>
-          }
-          showIcon
-          style={{ background: '#fff', borderRadius: 12 }}
-        />
-      </div>
-    </div>
-  );
 
   return (
     <Card className="chat-window" style={{ width: '100%', height: '100vh', margin: '0 auto' }} styles={{ body: { display: 'flex', flexDirection: 'column', height: '100%' } }}>
@@ -87,8 +60,7 @@ const ChatWindow = ({ messages = [], onSend, loading, stepData, onComplete, onRo
           </div>
         )}
 
-        {/* 欢迎态已隐藏 */}
-        {false && !stepData && renderWelcome()}
+        {/* 移除欢迎消息，不再在空对话时渲染任何提示 */}
 
         {messages && messages.length > 0 && (
           <List
@@ -96,6 +68,40 @@ const ChatWindow = ({ messages = [], onSend, loading, stepData, onComplete, onRo
             locale={{ emptyText: null }}
             renderItem={(msg) => {
               const isUser = msg.role === 'user';
+              const hasCard = !!msg.card;
+              // 合并卡片与文案的助手消息体
+              if (!isUser && hasCard) {
+                return (
+                  <List.Item style={{ border: 'none', padding: '8px 0' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'flex-start',
+                        gap: 8,
+                        alignItems: 'flex-start',
+                        width: '100%',
+                      }}
+                    >
+                      <Avatar
+                        size={28}
+                        src={`${process.env.PUBLIC_URL}/avatars/assistant.svg`}
+                        alt="assistant"
+                      />
+                      <div style={{ maxWidth: '75%' }}>
+                        {/* 外层气泡：将文案和卡片一起包裹，其他样式保持不变 */}
+                        <div style={{ ...bubbleStyle(false) }}>
+                          {msg.content && (
+                            <div style={{ width: '100%', marginBottom: 8 }}>{msg.content}</div>
+                          )}
+                          <CreditStepCard stepData={msg.card} onComplete={onComplete} loading={loading} />
+                        </div>
+                      </div>
+                    </div>
+                  </List.Item>
+                );
+              }
+
+              // 常规文本消息
               return (
                 <List.Item style={{ border: 'none', padding: '8px 0' }}>
                   <div
@@ -129,113 +135,35 @@ const ChatWindow = ({ messages = [], onSend, loading, stepData, onComplete, onRo
           />
         )}
 
-        {/* 将当前步骤卡片作为助手消息渲染到聊天窗口中 */}
-        {stepData && (
-          <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '8px 0', gap: 8 }}>
-            <Avatar size={28} icon={<RobotOutlined />} />
-            <div style={{ maxWidth: '75%' }}>
-              <CreditStepCard stepData={stepData} onComplete={onComplete} loading={loading} />
-            </div>
-          </div>
-        )}
-        {/* 已隐藏授信步骤卡片 */}
+        {/* 已隐藏：单独基于 stepData 的卡片渲染，避免与消息体重复 */}
         {false && stepData && (
           <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '8px 0', gap: 8 }}>
             <Avatar size={28} icon={<RobotOutlined />} />
-            <div style={{ maxWidth: '75%' }}>
+            <div style={{ maxWidth: '85%' }}>
               <CreditStepCard stepData={stepData} onComplete={onComplete} loading={loading} />
             </div>
           </div>
         )}
 
-        {/* 助手处理中提示 */}
-        {loading && (
-          <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '8px 0', gap: 8 }}>
-            <Avatar size={28} icon={<RobotOutlined />} />
-            <div
-              style={{
-                maxWidth: '75%',
-                background: '#fff',
-                color: '#333',
-                border: '1px solid #f0f0f0',
-                borderRadius: 12,
-                padding: '10px 12px',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8
-              }}
-            >
-              <Spin size="small" />
-              <span>助手正在处理，请稍候...</span>
-            </div>
-          </div>
-        )}
+        {/* 已隐藏授信步骤卡片（旧） */}
+        {false && stepData && null}
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            width: '100%',
-            maxWidth: '100%',
-            background: '#fff',
-            border: '1px solid #f0f0f0',
-            borderRadius: 28,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-            padding: '8px 12px',
-          }}
-        >
-          <Button
-            type="text"
-            icon={<PlusOutlined />}
-            disabled={loading}
-            style={{ width: 32, height: 32, borderRadius: 16 }}
-          />
-          <Input.TextArea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onPressEnter={(e) => {
-              if (!e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            placeholder="请输入与助手的对话内容..."
-            autoSize={{ minRows: 1, maxRows: 4 }}
-            disabled={loading}
-            style={{
-              flex: 1,
-              border: 'none',
-              outline: 'none',
-              boxShadow: 'none',
-              background: 'transparent',
-              resize: 'none',
-              padding: 0,
-            }}
-          />
-          <Button
-            type="text"
-            icon={<AudioOutlined />}
-            disabled
-            style={{ width: 32, height: 32 }}
-          />
-          <Button
-            shape="circle"
-            icon={<ArrowUpOutlined />}
-            onClick={handleSend}
-            disabled={loading || !input.trim()}
-            style={{
-              background: '#000',
-              color: '#fff',
-              width: 36,
-              height: 36,
-              boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
-            }}
-          />
-        </div>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', gap: 8 }}>
+        <Input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="请输入消息..."
+          onPressEnter={handleSend}
+          disabled={loading}
+        />
+        {/* 恢复输入栏的快捷按钮样式：加号方形按钮 */}
+        <Button
+          disabled={loading}
+          icon={<PlusOutlined />}
+          style={{ width: 32, height: 32, borderRadius: 8 }}
+        />
+        <Button type="primary" onClick={handleSend} disabled={loading} icon={<ArrowUpOutlined />}>发送</Button>
       </div>
     </Card>
   );

@@ -12,10 +12,10 @@ spring:
     name: rag-elasticsearch
   config:
     import:
-      - optional:classpath:config/dev/application-mcp-dev.yml
+#      - optional:classpath:config/dev/application-mcp-dev.yml
       - optional:classpath:config/dev/application-query-rewrite-dev.yml
       - optional:classpath:config/dev/application-memory-dev.yml
-      - optional:classpath:config/dev/application-langfuse-dev.yml
+      # - optional:classpath:config/dev/application-langfuse-dev.yml
   ai:
     chat:
       observations:
@@ -30,14 +30,18 @@ spring:
       chat:
         options:
           model: qwen3-max
+          timeout: 60s        # 增加超时时间到60秒
+          max-retries: 3      # 设置最大重试次数
       embedding:
         options:
           model: text-embedding-v1
+          timeout: 30s        # 嵌入模型超时时间
+          max-retries: 3      # 嵌入模型重试次数
 
     vectorstore:
       elasticsearch:
-        initialize-schema: true
-        index-name: ai_loan1_
+        initialize-schema: false
+        index-name: ai_loan1_ik
         similarity: cosine
         dimensions: 1536
 

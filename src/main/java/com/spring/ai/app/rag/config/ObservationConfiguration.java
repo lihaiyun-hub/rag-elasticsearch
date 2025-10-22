@@ -6,6 +6,7 @@ import io.micrometer.observation.ObservationRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
+import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.observation.ChatClientObservationContext;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.observation.ChatModelObservationContext;
@@ -14,13 +15,10 @@ import org.springframework.ai.embedding.observation.EmbeddingModelObservationCon
 import org.springframework.ai.observation.AiOperationMetadata;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.observation.ToolCallingObservationContext;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
 import java.util.List;
 
 
@@ -29,28 +27,15 @@ public class ObservationConfiguration {
 
     private static final Logger logger = LoggerFactory.getLogger(ObservationConfiguration.class);
 
+    /**
+     * 可选：如果需要自定义ObservationRegistry配置，可以保留此方法
+     * 但不再手动注册ObservationHandler，让Spring Boot自动配置处理
+     */
     @Bean
     @ConditionalOnMissingBean(name = "observationRegistry")
-    public ObservationRegistry observationRegistry(
-            ObjectProvider<ObservationHandler<?>> observationHandlerObjectProvider) {
-        ObservationRegistry observationRegistry = ObservationRegistry.create();
-        ObservationRegistry.ObservationConfig observationConfig = observationRegistry.observationConfig();
-        observationHandlerObjectProvider.orderedStream().forEach(handler -> {
-            Type[] genericInterfaces = handler.getClass().getGenericInterfaces();
-            for (Type type : genericInterfaces) {
-                if (type instanceof ParameterizedType parameterizedType
-                        && parameterizedType.getRawType() instanceof Class<?> clazz
-                        && ObservationHandler.class.isAssignableFrom(clazz)) {
-
-                    Type actualTypeArgument = parameterizedType.getActualTypeArguments()[0];
-                    logger.info("load observation handler, supports context type: {}", actualTypeArgument);
-                }
-            }
-
-            // 将handler添加到observationRegistry中
-            observationConfig.observationHandler(handler);
-        });
-        return observationRegistry;
+    public ObservationRegistry observationRegistry() {
+        // 让Spring Boot自动配置处理ObservationHandler的注册
+        return ObservationRegistry.create();
     }
 
     /**
@@ -81,6 +66,18 @@ public class ObservationConfiguration {
                             advisors.stream().map(a -> a.getName() + "(order:" + a.getOrder() + ")")
                                     .collect(java.util.stream.Collectors.joining(", ")));
                 }
+
+                // 打印 ChatClient 的请求体
+//                try {
+//                    ChatClientRequest request = context.getRequest();
+//                    if (request != null) {
+//                        logger.info(" ChatClient请求体对象: {}", request);
+//                    } else {
+//                        logger.info(" ChatClient请求体对象: null");
+//                    }
+//                } catch (Throwable t) {
+//                    logger.warn(" 无法获取 ChatClient 请求体: {}", t.toString());
+//                }
             }
 
             @Override
@@ -107,19 +104,11 @@ public class ObservationConfiguration {
             public void onStart(ChatModelObservationContext context) {
                 AiOperationMetadata operationMetadata = context.getOperationMetadata();
                 Prompt request = context.getRequest();
-                
-                if (request != null && request.getInstructions() != null) {
-                    logger.info("AI模型请求 - 操作: {}, 指令数量: {}",
-                            operationMetadata != null ? operationMetadata.operationType() : "unknown",
-                            request.getInstructions().size());
-                    
-                    // 只打印关键信息，避免重复
-                    request.getInstructions().forEach(instruction -> {
-                        logger.info("   {}: {}", instruction.getMessageType(),
-                                instruction.getText().length() > 500 ?
-                                instruction.getText().substring(0, 500) + "..." :
-                                instruction.getText());
-                    });
+
+                if (request != null) {
+                    logger.info(" ChatModel请求体对象: {}", request);
+                } else {
+                    logger.info(" ChatModel请求体对象: null");
                 }
             }
 

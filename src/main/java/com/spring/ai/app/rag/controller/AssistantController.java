@@ -29,32 +29,40 @@ public class AssistantController {
 	public String chat(@RequestBody ChatRequest request) {
 		try {
 			// 构建用户上下文（允许为空，后端会使用默认值）
-			UserContext userContext = null;
-			if (request.getUserName() != null || request.getAvailableCredit() != null
-					|| request.getCurrentLoanPlan() != null || request.getRecentRepaymentStatus() != null
-					|| request.getMaxLoanAmount() != null) {
-				userContext = new UserContext(
-						request.getUserName() != null ? request.getUserName() : new UserContext().getUserName(),
-						request.getAvailableCredit() != null ? request.getAvailableCredit() : new UserContext().getAvailableCredit(),
-						request.getCurrentLoanPlan() != null ? request.getCurrentLoanPlan() : new UserContext().getCurrentLoanPlan(),
-						request.getRecentRepaymentStatus() != null ? request.getRecentRepaymentStatus() : new UserContext().getRecentRepaymentStatus(),
-						request.getMaxLoanAmount() != null ? request.getMaxLoanAmount() : new UserContext().getMaxLoanAmount()
-				);
+			UserContext userContext = new UserContext();
+			if (request.getUserName() != null) {
+				userContext.setUserName(request.getUserName());
 			}
-
-            // 若前端显式传递了授信状态，则覆盖服务侧的记录，并注入到用户上下文
+			if (request.getAvailableCredit() != null) {
+				userContext.setAvailableCredit(request.getAvailableCredit());
+			}
+			if (request.getRecentRepaymentStatus() != null) {
+				userContext.setRecentRepaymentStatus(request.getRecentRepaymentStatus());
+			}
+			// 若前端显式传递了授信状态，则覆盖服务侧的记录，并注入到用户上下文
             if (request.getAuthorized() != null) {
                 // 更新服务侧记录，保证状态机与授权状态一致
                 consumerCreditService.setAuthorized(request.getChatId(), request.getAuthorized());
                 // 将授权状态注入到用户上下文，供后续助手逻辑直接使用
-                if (userContext == null) {
-                    userContext = new UserContext();
-                }
                 userContext.setAuthorized(request.getAuthorized());
             }
 
-			String response = agent.chat(request.getChatId(), request.getUserMessage(), userContext);
-			return response;
+            // 接收并传递可选分期、银行卡后四位、银行名信息到助手服务
+            String bankCardNumber = request.getBankCardNumber();
+            String bankName = request.getBankName();
+            // 将 termOptions 传送到助手服务内部逻辑
+            // 将画像信息注入到 UserContext
+            userContext.setTermOptions(request.getTermOptions());
+            userContext.setLoanPurposes(request.getLoanPurposes());
+            userContext.setBankCardNumber(bankCardNumber);
+            userContext.setBankName(bankName);
+
+            String response = agent.chat(
+                request.getChatId(),
+                request.getUserMessage(),
+                userContext
+            );
+            return response;
 		} catch (Exception e) {
 			logger.error("AssistantController chat failed", e);
 			return "抱歉，当前服务繁忙或工具调用出现问题，请稍后重试。";

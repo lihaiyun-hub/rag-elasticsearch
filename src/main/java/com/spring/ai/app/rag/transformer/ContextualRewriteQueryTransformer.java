@@ -3,6 +3,8 @@ package com.spring.ai.app.rag.transformer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.rag.Query;
@@ -10,14 +12,41 @@ import org.springframework.ai.rag.preretrieval.query.transformation.QueryTransfo
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.core.io.Resource;
 
+import java.util.List;
+import java.util.Map;
+
 public class ContextualRewriteQueryTransformer implements QueryTransformer {
 
     private static final Logger logger = LoggerFactory.getLogger(ContextualRewriteQueryTransformer.class);
+    private static final ThreadLocal<String> CURRENT_CHAT_ID = new ThreadLocal<>();
+    
     private final ChatClient chatClient;
     private final PromptTemplate promptTemplate;
+    private final ChatMemory chatMemory;
 
-    public ContextualRewriteQueryTransformer(ChatClient.Builder chatClientBuilder, Resource customPromptResource) {
+    /**
+     * 设置当前线程的chatId，用于QueryTransformer获取历史记录
+     */
+    public static void setCurrentChatId(String chatId) {
+        CURRENT_CHAT_ID.set(chatId);
+    }
+
+    /**
+     * 清除当前线程的chatId
+     */
+    public static void clearCurrentChatId() {
+        CURRENT_CHAT_ID.remove();
+    }
+    /**
+     * 获取当前线程的chatId
+     */
+    private static String getCurrentChatId() {
+        return CURRENT_CHAT_ID.get();
+    }
+
+    public ContextualRewriteQueryTransformer(ChatClient.Builder chatClientBuilder, Resource customPromptResource, ChatMemory chatMemory) {
         this.chatClient = chatClientBuilder.build();
+        this.chatMemory = chatMemory;
         
         // 加载提示模板
         Resource promptResource = customPromptResource != null ? customPromptResource :
@@ -30,71 +59,45 @@ public class ContextualRewriteQueryTransformer implements QueryTransformer {
 
     @Override
     public Query transform(Query query) {
-        // 获取用户消息
-        String userText = query.text();
+        String queryText = query.text();
         
-        // 处理简单的问候语查询
-        String processedQuery = handleSimpleQueries(userText);
-        if (!processedQuery.equals(userText)) {
-            logger.debug("Simple query detected and rewritten: {} -> {}", userText, processedQuery);
-            return Query.builder()
-                    .text(processedQuery)
-                    .build();
+        if (queryText == null || queryText.trim().isEmpty()) {
+            return query;
         }
-        
-        // 解析可能包含历史记录的增强查询格式
-        QueryHistoryPair parsed = parseEnhancedQuery(userText);
-        String history = parsed.history;
-        String currentQuery = parsed.currentQuery;
-        
-        logger.debug("Parsed history: {}", history.isEmpty() ? "empty" : "present");
-        logger.debug("Current query: {}", currentQuery);
-
-        // 构建提示（现在包含历史记录）
-        String prompt = promptTemplate.render(java.util.Map.of(
-                "history", history,
-                "query", currentQuery
-        ));
-        
-        logger.debug("渲染后的提示模板内容:\n{}", prompt);
-
-        // 调用模型重写查询
-        ChatResponse response = chatClient.prompt(prompt).call().chatResponse();
-        String rewrittenQuery = response.getResult().getOutput().getText();
-        
-        logger.debug("查询重写结果: {} -> {}", currentQuery, rewrittenQuery);
-
-        // 返回重写后的查询
-        return Query.builder()
-                .text(rewrittenQuery)
-                .build();
-    }
-
-    /**
-     * 解析增强查询格式，分离历史记录和当前查询
-     */
-    private QueryHistoryPair parseEnhancedQuery(String enhancedQuery) {
+        // 尝试从ThreadLocal获取chatId
+        String chatId = getCurrentChatId();
         String history = "";
-        String currentQuery = enhancedQuery;
-        
-        // 检查是否包含历史记录标记
-        int historyStart = enhancedQuery.indexOf("===HISTORY_START===");
-        int historyEnd = enhancedQuery.indexOf("===HISTORY_END===");
-        int queryStart = enhancedQuery.indexOf("===CURRENT_QUERY===");
-        
-        if (historyStart != -1 && historyEnd != -1 && queryStart != -1) {
-            // 提取历史记录
-            history = enhancedQuery.substring(historyStart + "===HISTORY_START===".length(), historyEnd).trim();
-            
-            // 提取当前查询
-            currentQuery = enhancedQuery.substring(queryStart + "===CURRENT_QUERY===".length()).trim();
-            
-            logger.debug("Successfully parsed enhanced query format");
-        } else {
-            logger.debug("No enhanced query format detected, using original query");
+        String currentQuery = queryText;
+
+        // 如果有chatId，直接从ChatMemory获取历史记录
+        if (chatId != null && chatMemory != null) {
+            List<Message> messages = chatMemory.get(chatId);
+            if (!messages.isEmpty()) {
+                StringBuilder historyBuilder = new StringBuilder();
+                for (Message message : messages) {
+                    historyBuilder.append(message.getMessageType())
+                            .append(": ")
+                            .append(message.getText())
+                            .append("\n");
+                }
+                history = historyBuilder.toString();
+            }
         }
-        
-        return new QueryHistoryPair(history, currentQuery);
+        String transformedQuery;
+        // 1. 简单规则处理
+        String processedQuery = handleSimpleQueries(currentQuery);
+        if (!processedQuery.equals(currentQuery)) {
+            transformedQuery = processedQuery;
+        } else {
+             // 3. 上下文感知的查询重写（历史记录可以为空）
+            try {
+                transformedQuery = rewriteQueryWithContext(history, currentQuery);
+            } catch (Exception e) {
+                transformedQuery = currentQuery;
+            }
+        }
+        // 关键：确保返回的查询是纯净的，不包含任何内部格式标记
+        return Query.builder().text(transformedQuery).build();
     }
     
     /**
@@ -103,47 +106,39 @@ public class ContextualRewriteQueryTransformer implements QueryTransformer {
     private String handleSimpleQueries(String query) {
         String cleanQuery = query.trim().toLowerCase();
         
-        // 问候语处理
-        if (cleanQuery.matches("^(你好|您好|hi|hello|在吗|有人吗)$")) {
-            return "客服问候语和开场白";
-        }
-        
         // 简单数字处理（避免被误解为金额）
         if (cleanQuery.matches("^\\d+$")) {
             return "借款" + query + "元";
         }
-        
         // 模糊表达处理
         if (cleanQuery.contains("借不了") || cleanQuery.contains("借不到")) {
             return "借款失败原因";
         }
-        
         if (cleanQuery.contains("提额") || cleanQuery.contains("提额度")) {
             return "提升额度";
         }
-        
         if (cleanQuery.contains("提前还")) {
             return "提前还款";
         }
-        
         if (cleanQuery.contains("额度") && cleanQuery.length() < 5) {
             return "额度查询";
         }
-        
         // 保持原查询
         return query;
     }
-    
+
+  
+
     /**
-     * 内部类，用于存储解析后的历史记录和查询
+     * 使用LLM进行上下文感知的查询重写
      */
-    private static class QueryHistoryPair {
-        final String history;
-        final String currentQuery;
-        
-        QueryHistoryPair(String history, String currentQuery) {
-            this.history = history;
-            this.currentQuery = currentQuery;
-        }
+    private String rewriteQueryWithContext(String history, String currentQuery) {
+        String prompt = promptTemplate.render(Map.of(
+                "history", history,
+                "query", currentQuery
+        ));
+        ChatResponse response = chatClient.prompt(prompt).call().chatResponse();
+        return response.getResult().getOutput().getText().trim();
     }
+
 }

@@ -5,7 +5,7 @@ spring:
   ai:
     mcp:
       client:
-        enabled: true  # 开发环境下禁用MCP客户端
+        enabled: false  # 开发环境下禁用MCP客户端
         name: my-mcp-client-dev
         version: 1.0.0
         request-timeout: 30s

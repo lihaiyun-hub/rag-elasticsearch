@@ -322,10 +322,7 @@ const CreditStepCard = ({ stepData, onComplete, loading }) => {
         const purposeVal = loanPurpose ?? offer.purpose;
         return (
           <div className="step-content">
-            {/* 标题弱化：取消大标题样式 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <div style={{ fontSize: 16, color: '#1677ff' }}>为您推荐以下消费贷方案</div>
-            </div>
+            {/* 已移除固定标题，保留后续内容 */}
 
             <Skeleton active loading={loading}>
               {/* 金额与利率 */}
@@ -366,20 +363,21 @@ const CreditStepCard = ({ stepData, onComplete, loading }) => {
                   </span>
                 </div>
 
-                {/* 收款账户：下拉可编辑 */}
+                {/* 收款账户：下拉可编辑，展示尾号 */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
                   <span style={{ color: '#666' }}>收款账户</span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                  <span>
                     <Select
                       size="small"
                       value={accountVal}
                       onChange={(v) => setAccountSelection(v)}
                       options={[
-                        '网商银行(5386)',
-                        '中国银行(1234)',
-                        '招商银行(4321)',
-                        '建设银行(5566)',
-                        '工商银行(9988)'
+                        // 仅展示尾号
+                        `网商银行(${String(offer?.bankTail || '').slice(-4) || '****'})`,
+                        `中国银行(${String(offer?.bankTail || '').slice(-4) || '****'})`,
+                        `招商银行(${String(offer?.bankTail || '').slice(-4) || '****'})`,
+                        `建设银行(${String(offer?.bankTail || '').slice(-4) || '****'})`,
+                        `工商银行(${String(offer?.bankTail || '').slice(-4) || '****'})`
                       ].map((s) => ({ value: s, label: s }))}
                       style={{ minWidth: 156 }}
                     />

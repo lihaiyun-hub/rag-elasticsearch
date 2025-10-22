@@ -2,6 +2,7 @@ package com.spring.ai.app.rag.config;
 
 import com.spring.ai.app.rag.transformer.ContextualRewriteQueryTransformer;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.rag.preretrieval.query.transformation.QueryTransformer;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,18 +32,18 @@ public class QueryTransformerConfig {
     /**
      * 配置重写查询转换器
      * 使用LLM来重写用户查询，提供更好的检索结果
-     * 支持自定义prompt模板
+     * 支持自定义prompt模板和ChatMemory注入
      */
     @Bean
     @Qualifier("rewriteQueryTransformer")
-    public QueryTransformer rewriteQueryTransformer(ChatClient.Builder chatClientBuilder) {
+    public QueryTransformer rewriteQueryTransformer(ChatClient.Builder chatClientBuilder, ChatMemory chatMemory) {
         if (!queryRewriteEnabled) {
             // 如果禁用，返回原查询的转换器
             return query -> query;
         }
 
-        // 使用增强版上下文感知重写器
-        return new ContextualRewriteQueryTransformer(chatClientBuilder, customPromptResource);
+        // 使用增强版上下文感知重写器，注入ChatMemory
+        return new ContextualRewriteQueryTransformer(chatClientBuilder, customPromptResource, chatMemory);
     }
 
     /**

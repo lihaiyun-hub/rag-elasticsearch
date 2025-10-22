@@ -1,7 +1,5 @@
 package com.spring.ai.app.rag.flow;
 
-import com.spring.ai.app.rag.flow.Card;
-import com.spring.ai.app.rag.flow.ChatResponse;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
