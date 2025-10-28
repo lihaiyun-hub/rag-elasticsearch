@@ -9,7 +9,6 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.preretrieval.query.transformation.QueryTransformer;
-import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.core.io.Resource;
 
 import java.util.List;
@@ -48,12 +47,60 @@ public class ContextualRewriteQueryTransformer implements QueryTransformer {
         this.chatClient = chatClientBuilder.build();
         this.chatMemory = chatMemory;
         
-        // 加载提示模板
-        Resource promptResource = customPromptResource != null ? customPromptResource :
-                new DefaultResourceLoader().getResource("classpath:prompts/contextual-rewrite-prompt.st");
+        // 优化的资源加载逻辑，所有资源都从PromptConfig注入
+        this.promptTemplate = createPromptTemplate(customPromptResource);
+    }
+    
+    /**
+     * 创建提示模板，优化资源加载逻辑
+     * @param promptResource 从PromptConfig注入的提示资源
+     * @return 构建好的PromptTemplate
+     */
+    private PromptTemplate createPromptTemplate(Resource promptResource) {
+        try {
+            // 验证资源是否存在
+            if (promptResource != null && promptResource.exists()) {
+                logger.debug("Using prompt resource: {}", promptResource);
+                return PromptTemplate.builder()
+                        .resource(promptResource)
+                        .build();
+            } else {
+                logger.warn("Prompt resource is null or does not exist, falling back to default template");
+                return createFallbackPromptTemplate();
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to load prompt template from resource: {}, falling back to default template", 
+                    promptResource, e);
+            return createFallbackPromptTemplate();
+        }
+    }
+    
+    /**
+     * 创建后备提示模板，当资源加载失败时使用
+     * @return 后备的PromptTemplate
+     */
+    private PromptTemplate createFallbackPromptTemplate() {
+        String fallbackTemplate = """
+                请将用户查询重写为更清晰明确的意图表达，便于知识库检索。
+                
+                对话历史：
+                {history}
+                
+                当前查询：
+                {query}
+                
+                重写规则：
+                1. 简短的金额数字 → 补全为借款意图
+                2. 模糊抱怨 → 明确具体问题
+                3. 口语化表达 → 标准化术语
+                4. 利用历史上下文补全省略信息
+                
+                只输出重写后的查询，不要解释。
+                """;
         
-        this.promptTemplate = PromptTemplate.builder()
-                .resource(promptResource)
+        logger.info("Using fallback prompt template");
+        return PromptTemplate.builder()
+                .template(fallbackTemplate)
                 .build();
     }
 

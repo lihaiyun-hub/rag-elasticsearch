@@ -78,18 +78,15 @@ public class ElasticsearchConfig {
    @Bean
    @Qualifier("elasticsearchVectorStore")
    public ElasticsearchVectorStore vectorStore(RestClient restClient, EmbeddingModel embeddingModel) {
-       logger.info("create elasticsearch vector store");
+       logger.info("create elasticsearch vector store with IK analyzer support");
 
        ElasticsearchVectorStoreOptions options = new ElasticsearchVectorStoreOptions();
        options.setIndexName(indexName);    // Optional: defaults to "spring-ai-document-index"
        options.setSimilarity(similarityFunction);           // Optional: defaults to COSINE
        options.setDimensions(dimensions);             // Optional: defaults to model dimensions or 1536
 
-       return ElasticsearchVectorStore.builder(restClient, embeddingModel)
-               .options(options)                     // Optional: use custom options
-               .initializeSchema(false)               // Respect application.yml to avoid startup/index init issues
-               .batchingStrategy(new TokenCountBatchingStrategy())// Optional: defaults to TokenCountBatchingStrategy
-               .build();
+       // 创建自定义的ElasticsearchVectorStore，支持IK分词器
+       return new CustomIKElasticsearchVectorStore(restClient, embeddingModel, options);
    }
 
 }

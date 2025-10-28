@@ -20,4 +20,10 @@ logging:
     com.spring.ai.app.rag.config.ObservationConfiguration: INFO
     com.spring.ai.app.rag.controller: DEBUG
 
+    com.spring.ai.app.rag.services.IntentExtractionService: DEBUG
+    com.spring.ai.app.rag.services.RetrievalService: DEBUG
+    com.spring.ai.app.rag.services.CustomerSupportAssistantV2: DEBUG
+
+
+
 

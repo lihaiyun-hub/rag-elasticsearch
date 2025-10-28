@@ -37,7 +37,7 @@ public class BM25DocumentRetriever implements DocumentRetriever {
                     .index(indexName)
                     .query(q -> q
                             .match(m -> m
-                                    // Spring AI ElasticsearchVectorStore 默认文本字段为 "content"
+                                    // 查询content字段，这是Spring AI ElasticsearchVectorStore存储文档内容的字段
                                     .field("content")
                                     .query(query.text())
                             )

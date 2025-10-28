@@ -248,7 +248,7 @@ public class PromptInjectionFilter {
      */
     public String sanitizeInput(String input) {
         if (input == null) {
-            return null;
+            return "";
         }
         
         // 移除控制字符

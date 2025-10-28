@@ -5,7 +5,6 @@ spring:
   config:
     import:
       - optional:classpath:config/prod/application-mcp-prod.yml
-      - optional:classpath:config/prod/application-query-rewrite-prod.yml
       - optional:classpath:config/prod/application-memory-prod.yml
       - optional:classpath:config/prod/application-langfuse-prod.yml
   ai:
@@ -26,9 +25,9 @@ spring:
     vectorstore:
       elasticsearch:
         initialize-schema: false
-        index-name: ai_loan1_ik
+        index-name: customer_support_qa
         similarity: cosine
-        dimensions: 1536
+        dimensions: 1024
 
     rag:
       retriever:
@@ -52,3 +51,16 @@ spring:
     uris: http://127.0.0.1:9200
     username: elastic
     password: yingzi
+
+app:
+  # RAG配置
+  rag:
+    query-rewrite:
+      enabled: true  # 启用查询重写功能
+  
+  # 安全配置（生产环境更严格）
+  security:
+    input-check:
+      enabled: true  # 启用输入安全检查
+    output-check:
+      enabled: true  # 启用输出安全检查

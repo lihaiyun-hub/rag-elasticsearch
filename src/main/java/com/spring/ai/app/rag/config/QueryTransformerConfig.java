@@ -26,9 +26,6 @@ public class QueryTransformerConfig {
     @Value("${spring.ai.rag.query-rewrite.enabled:true}")
     private boolean queryRewriteEnabled;
 
-    @Value("${spring.ai.rag.query-rewrite.custom-prompt-resource:}")
-    private Resource customPromptResource;
-
     /**
      * 配置重写查询转换器
      * 使用LLM来重写用户查询，提供更好的检索结果
@@ -36,7 +33,9 @@ public class QueryTransformerConfig {
      */
     @Bean
     @Qualifier("rewriteQueryTransformer")
-    public QueryTransformer rewriteQueryTransformer(ChatClient.Builder chatClientBuilder, ChatMemory chatMemory) {
+    public QueryTransformer rewriteQueryTransformer(ChatClient.Builder chatClientBuilder, 
+                                                   ChatMemory chatMemory,
+                                                   @Qualifier("customPromptResource") Resource customPromptResource) {
         if (!queryRewriteEnabled) {
             // 如果禁用，返回原查询的转换器
             return query -> query;

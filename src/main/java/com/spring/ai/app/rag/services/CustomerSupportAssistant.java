@@ -15,6 +15,7 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 
@@ -37,16 +38,16 @@ public class CustomerSupportAssistant {
     private final ResponseSecurityMonitor responseSecurityMonitor;
     private final SecurityAuditLogger auditLogger;
 
-    public CustomerSupportAssistant(Resource systemPromptResource,
-                                     ChatClient.Builder modelBuilder,
-                                     RetrievalAugmentationAdvisor retrievalAugmentationAdvisor,
-                                     PromptChatMemoryAdvisor promptChatMemoryAdvisor,
-                                     ChatMemory chatMemory,
-                                     MemoryConfig memoryConfig,
-                                     PromptInjectionFilter promptInjectionFilter,
-                                     ResponseSecurityMonitor responseSecurityMonitor,
-                                     SecurityAuditLogger auditLogger,
-                                     ConsumerLoanTools consumerLoanTools) {
+    public CustomerSupportAssistant(@Qualifier("systemPrompt") Resource systemPromptResource,
+                                    ChatClient.Builder modelBuilder,
+                                    RetrievalAugmentationAdvisor retrievalAugmentationAdvisor,
+                                    PromptChatMemoryAdvisor promptChatMemoryAdvisor,
+                                    ChatMemory chatMemory,
+                                    MemoryConfig memoryConfig,
+                                    PromptInjectionFilter promptInjectionFilter,
+                                    ResponseSecurityMonitor responseSecurityMonitor,
+                                    SecurityAuditLogger auditLogger,
+                                    ConsumerLoanTools consumerLoanTools) {
         var builder = modelBuilder
                 .defaultSystem(systemPromptResource)
                 .defaultAdvisors(retrievalAugmentationAdvisor, promptChatMemoryAdvisor);
@@ -67,28 +68,24 @@ public class CustomerSupportAssistant {
     }
 
 
-
-
-
-
     public String chat(String chatId, String userMessageContent, UserContext userContext) {
         // 获取用户ID（从userContext或chatId）
         String userId = userContext != null ? userContext.getUserName() : chatId;
 
         try {
             // 1. 输入安全检查
-            PromptInjectionFilter.DetectionResult injectionResult =
-                    promptInjectionFilter.detectInjection(userMessageContent);
-
-            if (injectionResult.isMalicious()) {
-                logger.warn("检测到恶意输入 - chatId: {}, userId: {}, riskScore: {}, reason: {}",
-                        chatId, userId, injectionResult.getRiskScore(), injectionResult.getReason());
-
-                // 记录攻击行为
-                auditLogger.logInputCheck(chatId, userId, false, injectionResult.getRiskScore(), injectionResult.getReason());
-
-                return "检测到异常请求格式，请使用正常的贷款咨询语言重新提问。";
-            }
+//            PromptInjectionFilter.DetectionResult injectionResult =
+//                    promptInjectionFilter.detectInjection(userMessageContent);
+//
+//            if (injectionResult.isMalicious()) {
+//                logger.warn("检测到恶意输入 - chatId: {}, userId: {}, riskScore: {}, reason: {}",
+//                        chatId, userId, injectionResult.getRiskScore(), injectionResult.getReason());
+//
+//                // 记录攻击行为
+//                auditLogger.logInputCheck(chatId, userId, false, injectionResult.getRiskScore(), injectionResult.getReason());
+//
+//                return "检测到异常请求格式，请使用正常的贷款咨询语言重新提问。";
+//            }
 
             // 2. 清理用户输入
             String sanitizedInput = promptInjectionFilter.sanitizeInput(userMessageContent);
@@ -108,7 +105,7 @@ public class CustomerSupportAssistant {
 
             // 6. 设置当前线程的chatId，供QueryTransformer使用
             ContextualRewriteQueryTransformer.setCurrentChatId(chatId);
-            
+
             try {
                 // 7. 调用chatClient获取响应（现在包含意图识别和RAG检索）
                 // 关键：直接使用sanitizedInput，让QueryTransformer从ChatMemory获取历史记录
@@ -116,11 +113,12 @@ public class CustomerSupportAssistant {
                         .system(s -> systemParams.forEach(s::param))
                         .user(sanitizedInput)  // 使用纯净的用户输入
                         .advisors(a -> a.param(CONVERSATION_ID, chatId)
-                                       .param(TOP_K, memoryConfig.getTopK()))
+                                .param(TOP_K, memoryConfig.getTopK()))
                         .call()
                         .content();
-                
-                return processResponse(response, chatId, userId, userMessageContent);
+
+//                return processResponse(response, chatId, userId, userMessageContent);
+                return response;
             } finally {
                 // 8. 清除ThreadLocal，避免内存泄漏
                 ContextualRewriteQueryTransformer.clearCurrentChatId();
