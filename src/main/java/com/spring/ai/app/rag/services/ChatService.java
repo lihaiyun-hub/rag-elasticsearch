@@ -72,7 +72,8 @@ public class ChatService {
             if (sanitizedInput == null || sanitizedInput.trim().isEmpty()) {
                 return "请输入您的问题，我将为您提供帮助。";
             }
-
+            // 若该会话首条用户输入仅为数字，则为首句自动加“借”前缀
+            sanitizedInput = maybeAutoPrefixBorrowIfFirstNumericSentence(chatId, sanitizedInput);
             // 2. 取出本会话历史（可选：拼到 prompt 里）
             List<Message> history = chatMemory.get(chatId);
 
@@ -158,6 +159,47 @@ public class ChatService {
 
 
     /**
+     * 若该会话是用户的首条输入，且第一句仅为数字，则在前面加“借”。
+     */
+    private String maybeAutoPrefixBorrowIfFirstNumericSentence(String chatId, String input) {
+        try {
+            List<Message> history = chatMemory.get(chatId);
+            boolean firstUserInput = true;
+            if (history != null) {
+                for (Message m : history) {
+                    if (m != null && m.getType() == Message.Type.USER) {
+                        firstUserInput = false;
+                        break;
+                    }
+                }
+            }
+            if (!firstUserInput) {
+                return input;
+            }
+
+            String s = input;
+            int boundary = -1;
+            for (int i = 0; i < s.length(); i++) {
+                char c = s.charAt(i);
+                if (c == '。' || c == '！' || c == '？' || c == '.' || c == '!' || c == '?' || c == '\n' || c == '\r') {
+                    boundary = i;
+                    break;
+                }
+            }
+            String first = boundary == -1 ? s : s.substring(0, boundary);
+            String normalized = first.replaceAll("[\\s\\p{Punct}，。！？、；：—-]", "");
+            if (!normalized.isEmpty() && normalized.matches("\\d+")) {
+                String updated = "借" + first + (boundary == -1 ? "" : s.substring(boundary));
+                logger.info("前缀修正：首条用户输入为纯数字，已自动加前缀 -> {}", updated);
+                return updated;
+            }
+        } catch (Exception e) {
+            logger.debug("前缀修正跳过，原因: {}", e.toString());
+        }
+        return input;
+    }
+
+    /**
      * 解析授权状态：
      * - workFlowFlag="01" → 未授信(false)
      * - workFlowFlag="02" → 已授信(true)
@@ -175,3 +217,4 @@ public class ChatService {
     }
 
 }
+
