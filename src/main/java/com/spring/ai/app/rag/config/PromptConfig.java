@@ -1,5 +1,10 @@
 package com.spring.ai.app.rag.config;
 
+import com.spring.ai.app.rag.chat.PromptChatMemoryAdvisor;
+import com.spring.ai.app.rag.chat.ChatClient;
+import com.spring.ai.app.rag.chat.SimpleChatClient;
+
+import com.spring.ai.app.rag.services.LargeLanguageModelService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,6 +34,8 @@ public class PromptConfig {
         return systemPromptResource;
     }
     
+
+    
     @Bean
     public Resource intentExtractionPrompt() throws IOException {
         return intentExtractionPromptResource;
@@ -37,6 +44,14 @@ public class PromptConfig {
     @Bean
     public Resource customPromptResource() throws IOException {
         return customPromptResourceValue;
+    }
+
+    @Bean
+    public ChatClient chatClient(LargeLanguageModelService llmService, PromptChatMemoryAdvisor promptChatMemoryAdvisor) {
+        return new SimpleChatClient.Builder(llmService)
+                .defaultSystem(intentExtractionPromptResource)
+                .defaultAdvisors(promptChatMemoryAdvisor)
+                .build();
     }
 
 }

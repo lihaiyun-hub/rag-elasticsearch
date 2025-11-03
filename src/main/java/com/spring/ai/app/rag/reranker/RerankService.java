@@ -6,13 +6,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
-import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestTemplate;
 
-import java.time.Duration;
 import java.util.*;
 
 @Component
@@ -20,26 +22,33 @@ public class RerankService {
 
     private static final Logger logger = LoggerFactory.getLogger(RerankService.class);
 
-    @Value("${spring.ai.rag.reranker.enabled}")
+    @Value("${spring.ai.rag.reranker.enabled:false}")
     private boolean enabled;
 
-    @Value("${spring.ai.rag.reranker.endpoint}")
+    @Value("${spring.ai.rag.reranker.endpoint:}")
     private String endpoint;
 
-    @Value("${spring.ai.rag.reranker.model}")
+    @Value("${spring.ai.rag.reranker.model:BAAI/bge-reranker-v2-m3}")
     private String model;
 
-    @Value("${spring.ai.rag.reranker.api-key}")
+    @Value("${spring.ai.rag.reranker.api-key:${spring.ai.openai.api-key:}}")
     private String apiKey;
 
-    @Value("${spring.ai.rag.reranker.timeout-ms}")
+    @Value("${spring.ai.rag.reranker.timeout-ms:3000}")
     private int timeoutMs;
 
-    private final WebClient webClient;
+    private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public RerankService() {
-        this.webClient = WebClient.builder().build();
+    public RerankService(
+            @Value("${spring.ai.rag.reranker.api-key:${spring.ai.openai.api-key:}}") String apiKey,
+            @Value("${spring.ai.rag.reranker.endpoint:${spring.ai.openai.base-url:}}") String endpoint,
+            @Value("${spring.ai.rag.reranker.model:BAAI/bge-reranker-v2-m3}") String model,
+            RestTemplate restTemplate) {
+        this.apiKey = apiKey;
+        this.endpoint = endpoint;
+        this.model = model;
+        this.restTemplate = restTemplate;
     }
 
     public boolean isEnabled() {
@@ -56,24 +65,19 @@ public class RerankService {
         payload.put("return_documents", false);
         payload.put("model", model);
         try {
-            String response = webClient.post()
-                    .uri(endpoint)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .accept(MediaType.APPLICATION_JSON)
-                    .headers(headers -> {
-                        if (StringUtils.hasText(apiKey)) {
-                            headers.set("Authorization", apiKey.startsWith("Bearer ") ? apiKey : ("Bearer " + apiKey));
-                        }
-                    })
-                    .bodyValue(payload)
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .timeout(Duration.ofMillis(timeoutMs))
-                    .block();
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+            if (StringUtils.hasText(apiKey)) {
+                headers.set("Authorization", apiKey.startsWith("Bearer ") ? apiKey : ("Bearer " + apiKey));
+            }
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
+            ResponseEntity<String> responseEntity = restTemplate.postForEntity(endpoint, entity, String.class);
+            String response = responseEntity.getBody();
             if (!StringUtils.hasText(response)) {
                 logger.warn("reranker returned empty response");
                 return Collections.emptyList();
-            }       
+            }
             RerankResponse rerankResponse = objectMapper.readValue(response, RerankResponse.class);
             if (rerankResponse.results == null) {
                 logger.warn("reranker response has no results");
@@ -85,13 +89,13 @@ public class RerankService {
             }
             items.sort((a, b) -> Double.compare(b.relevanceScore, a.relevanceScore));
             return items;
-        } catch (WebClientResponseException wcre) {
-            String body = wcre.getResponseBodyAsString();
+        } catch (HttpClientErrorException hcee) {
+            String body = hcee.getResponseBodyAsString();
             try {
                 ErrorResponse error = new ObjectMapper().readValue(body, ErrorResponse.class);
                 logger.error(" rerank error: {}", error);
             } catch (Exception ignore) {
-                logger.error(" rerank error status={}, body={}", wcre.getStatusCode(), body);
+                logger.error(" rerank error status={}, body={}", hcee.getStatusCode(), body);
             }
             return Collections.emptyList();
         } catch (Exception e) {

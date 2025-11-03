@@ -5,5 +5,6 @@ spring:
   ai:
     chat:
       memory:
-        max-messages: 10  # 开发环境：保存最近10条消息
+        max-rounds: 2     # 开发环境：保存最近2轮（约4条消息），便于验证
+        max-messages: 10  # 如未设置轮数，则回退为按消息计数
         top-k: 100       # 开发环境：TOP_K参数设置为100

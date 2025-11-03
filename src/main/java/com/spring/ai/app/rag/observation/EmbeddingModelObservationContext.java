@@ -1,0 +1,24 @@
+package com.spring.ai.app.rag.observation;
+
+import io.micrometer.observation.Observation;
+
+public class EmbeddingModelObservationContext extends Observation.Context {
+    private String operationType;
+    private String provider;
+
+    public String getOperationType() {
+        return operationType;
+    }
+
+    public void setOperationType(String operationType) {
+        this.operationType = operationType;
+    }
+
+    public String getProvider() {
+        return provider;
+    }
+
+    public void setProvider(String provider) {
+        this.provider = provider;
+    }
+}

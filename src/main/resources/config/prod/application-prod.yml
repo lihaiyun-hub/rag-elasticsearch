@@ -12,40 +12,36 @@ spring:
       client:
         observations:
           log-prompt: false    # 禁用Spring AI内置提示日志，使用自定义日志
-    openai:
-      api-key: sk-dae20e2b5ec340a3bd0de1cc476c2894
-      base-url: https://dashscope.aliyuncs.com/compatible-mode
+    models:
       chat:
-        options:
-          model: qwen-max
+        api-key: sk-dae20e2b5ec340a3bd0de1cc476c2894
+        base-url: https://dashscope.aliyuncs.com/compatible-mode
+        model: qwen-max
+        temperature: 0.7
+        max-tokens: 2048
       embedding:
-        options:
-          model: text-embedding-v1
-
-    vectorstore:
-      elasticsearch:
-        initialize-schema: false
-        index-name: customer_support_qa
-        similarity: cosine
-        dimensions: 1024
-
-    rag:
-      retriever:
-        type: hybrid  # 可选值: hybrid, vector, bm25
-      hybrid:
-        top-k: 5
-        rrf-k: 60
-      bm25:
-        top-n: 5
-      vector:
-        top-k: 5
-        similarity-threshold: 0.75
+        api-key: "sk-vcqgdvzbcchptznjpgcsyrfzrclvuvsidsrdpoyadgzgmtpg"
+        base-url: https://api.siliconflow.cn/v1
+        model: text-embedding-v1
       reranker:
         enabled: true
         endpoint: https://api.siliconflow.cn/v1/rerank
         model: BAAI/bge-reranker-v2-m3
         timeout-ms: 3000
         api-key: "sk-vcqgdvzbcchptznjpgcsyrfzrclvuvsidsrdpoyadgzgmtpg"
+    retrieval:
+      vector:
+        index-name: customer_support_qa
+        similarity: cosine
+        dimensions: 1024
+        top-k: 5
+        similarity-threshold: 0.75
+      hybrid:
+        top-k: 5
+        rrf-k: 60
+        weight:
+          bm25: 1.0
+          vector: 1.0
 
   elasticsearch:
     uris: http://127.0.0.1:9200

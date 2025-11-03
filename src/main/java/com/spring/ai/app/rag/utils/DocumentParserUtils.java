@@ -1,9 +1,9 @@
 package com.spring.ai.app.rag.utils;
 
 import com.spring.ai.app.rag.model.KnowledgeRecord;
+import com.spring.ai.app.rag.model.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.document.Document;
 
 /**
  * 文档解析工具类
@@ -19,7 +19,7 @@ public class DocumentParserUtils {
     /**
      * 解析文档内容为知识库记录
      * 
-     * @param document Spring AI Document对象
+     * @param document Document对象
      * @return KnowledgeRecord 知识库记录
      */
     public static KnowledgeRecord parseDocumentToKnowledgeRecord(Document document) {
@@ -52,22 +52,17 @@ public class DocumentParserUtils {
     }
     
     /**
-     * 从文档metadata中获取字符串值
+     * 从metadata中获取字符串值，提供默认值
      * 
-     * @param document 文档对象
+     * @param document Document对象
      * @param key metadata键
      * @param defaultValue 默认值
      * @return 字符串值
      */
     private static String getMetadataAsString(Document document, String key, String defaultValue) {
-        Object value = document.getMetadata().get(key);
-        if (value == null) {
-            return defaultValue;
-        }
-        return value.toString();
+        Object value = document.metadata().get(key);
+        return value != null ? value.toString() : defaultValue;
     }
-    
-
     
     /**
      * 转换处理类型字符串为枚举
@@ -82,41 +77,20 @@ public class DocumentParserUtils {
             return KnowledgeRecord.ProcessingType.DIRECT_ANSWER;
         }
     }
-    
+
     /**
-     * 验证知识库记录的完整性
-     * 
+     * 校验知识库记录是否有效
+     *
      * @param record 知识库记录
-     * @return 是否有效
+     * @return 是否有效（必须包含非空的query和answer）
      */
     public static boolean isValidKnowledgeRecord(KnowledgeRecord record) {
         if (record == null) {
             return false;
         }
-        
-        // 检查必要字段
-        if (record.getQuery() == null || record.getQuery().trim().isEmpty()) {
-            logger.warn("知识库记录缺少查询内容");
-            return false;
-        }
-        
-        if (record.getAnswer() == null || record.getAnswer().trim().isEmpty()) {
-            logger.warn("知识库记录缺少答案内容");
-            return false;
-        }
-        
-        if (record.getProcessingType() == null) {
-            logger.warn("知识库记录缺少处理类型");
-            return false;
-        }
-        
-        // 对于意图路由类型，检查intent字段
-        if (record.isIntentRouting() && 
-            (record.getIntent() == null || record.getIntent().trim().isEmpty())) {
-            logger.warn("意图路由类型的知识库记录缺少意图信息");
-            return false;
-        }
-        
-        return true;
+        String query = record.getQuery();
+        String answer = record.getAnswer();
+        return query != null && !query.trim().isEmpty()
+            && answer != null && !answer.trim().isEmpty();
     }
 }

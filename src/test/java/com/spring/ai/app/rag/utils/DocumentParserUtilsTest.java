@@ -2,7 +2,7 @@ package com.spring.ai.app.rag.utils;
 
 import com.spring.ai.app.rag.model.KnowledgeRecord;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.document.Document;
+import com.spring.ai.app.rag.model.Document;
 
 import java.util.HashMap;
 import java.util.Map;

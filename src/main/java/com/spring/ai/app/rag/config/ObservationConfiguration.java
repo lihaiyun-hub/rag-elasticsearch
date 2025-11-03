@@ -5,22 +5,13 @@ import io.micrometer.observation.ObservationHandler;
 import io.micrometer.observation.ObservationRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.client.advisor.api.Advisor;
-import org.springframework.ai.chat.client.ChatClientRequest;
-import org.springframework.ai.chat.client.observation.ChatClientObservationContext;
-import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.chat.observation.ChatModelObservationContext;
-import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.embedding.observation.EmbeddingModelObservationContext;
-import org.springframework.ai.observation.AiOperationMetadata;
-import org.springframework.ai.tool.definition.ToolDefinition;
-import org.springframework.ai.tool.observation.ToolCallingObservationContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.util.List;
-
+import com.spring.ai.app.rag.observation.ChatModelObservationContext;
+import com.spring.ai.app.rag.observation.EmbeddingModelObservationContext;
+import com.spring.ai.app.rag.observation.ToolCallingObservationContext;
 
 @Configuration
 public class ObservationConfiguration {
@@ -39,55 +30,6 @@ public class ObservationConfiguration {
     }
 
     /**
-     * 监听chat client调用
-     */
-    @Bean
-    ObservationHandler<ChatClientObservationContext> chatClientObservationContextObservationHandler() {
-        logger.info("ChatClientObservation start");
-        return new ObservationHandler<>() {
-
-            @Override
-            public boolean supportsContext(Observation.Context context) {
-                return context instanceof ChatClientObservationContext;
-            }
-
-            @Override
-            public void onStart(ChatClientObservationContext context) {
-                List<? extends Advisor> advisors = context.getAdvisors();
-                boolean stream = context.isStream();
-                
-                logger.info(" ChatClient请求 - 顾问数量: {}, 流式: {}",
-                        advisors != null ? advisors.size() : 0, 
-                        stream);
-                
-                // 只在有顾问时打印详细信息
-                if (advisors != null && !advisors.isEmpty()) {
-                    logger.info(" 激活的顾问: {}",
-                            advisors.stream().map(a -> a.getName() + "(order:" + a.getOrder() + ")")
-                                    .collect(java.util.stream.Collectors.joining(", ")));
-                }
-
-                // 打印 ChatClient 的请求体
-//                try {
-//                    ChatClientRequest request = context.getRequest();
-//                    if (request != null) {
-//                        logger.info(" ChatClient请求体对象: {}", request);
-//                    } else {
-//                        logger.info(" ChatClient请求体对象: null");
-//                    }
-//                } catch (Throwable t) {
-//                    logger.warn(" 无法获取 ChatClient 请求体: {}", t.toString());
-//                }
-            }
-
-            @Override
-            public void onStop(ChatClientObservationContext context) {
-                ObservationHandler.super.onStop(context);
-            }
-        };
-    }
-
-    /**
      * 监听chat model调用
      */
     @Bean
@@ -102,21 +44,15 @@ public class ObservationConfiguration {
 
             @Override
             public void onStart(ChatModelObservationContext context) {
-                AiOperationMetadata operationMetadata = context.getOperationMetadata();
-                Prompt request = context.getRequest();
-
-                if (request != null) {
-                    logger.info(" ChatModel请求体对象: {}", request);
-                } else {
-                    logger.info(" ChatModel请求体对象: null");
-                }
+                logger.info(" ChatModel请求开始 - 操作类型: {}, 提供者: {}, 请求内容: {}",
+                    context.getOperationType(),
+                    context.getProvider(),
+                    context.getRequest());
             }
 
             @Override
             public void onStop(ChatModelObservationContext context) {
-                ChatResponse response = context.getResponse();
-                logger.info("ChatModelObservation start: ChatResponse : {}",
-                        response);
+                logger.info(" ChatModel请求结束 - 响应内容: {}", context.getResponse());
             }
         };
     }
@@ -135,14 +71,12 @@ public class ObservationConfiguration {
 
             @Override
             public void onStart(ToolCallingObservationContext context) {
-                ToolDefinition toolDefinition = context.getToolDefinition();
-                logger.info("ToolCalling start: {} - {}", toolDefinition.name(), context.getToolCallArguments());
+                logger.info("ToolCalling start: {} - {}", context.getToolName(), context.getToolArguments());
             }
 
             @Override
             public void onStop(ToolCallingObservationContext context) {
-                ToolDefinition toolDefinition = context.getToolDefinition();
-                logger.info("ToolCalling done: {} - {}", toolDefinition.name(), context.getToolCallResult());
+                logger.info("ToolCalling done: {} - {}", context.getToolName(), context.getToolResult());
             }
         };
     }
@@ -161,11 +95,10 @@ public class ObservationConfiguration {
 
             @Override
             public void onStart(EmbeddingModelObservationContext context) {
-                logger.info("EmbeddingModelObservation start: {} - {}", context.getOperationMetadata().operationType(),
-                        context.getOperationMetadata().provider());
+                logger.info("EmbeddingModelObservation start: {} - {}", 
+                    context.getOperationType(),
+                    context.getProvider());
             }
         };
     }
-
-
 }

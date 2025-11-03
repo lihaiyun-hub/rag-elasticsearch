@@ -4,56 +4,55 @@ server:
 debug: false
 
 spring:
-#  autoconfigure:
-#    exclude:
-#      - org.springframework.ai.mcp.client.autoconfigure.McpClientAutoConfiguration
-#      - org.springframework.ai.mcp.client.autoconfigure.McpToolCallbackAutoConfiguration
   application:
     name: rag-elasticsearch
   config:
     import:
-#      - optional:classpath:config/dev/application-mcp-dev.yml
       - optional:classpath:config/dev/application-memory-dev.yml
-      # - optional:classpath:config/dev/application-langfuse-dev.yml
   ai:
-    chat:
-      observations:
-        log-prompt: false    # 禁用Spring AI内置提示日志，使用自定义日志
-        log-completion: false  # 禁用Spring AI内置完成日志
-      client:
-        observations:
-          log-prompt: false    # 禁用Spring AI内置客户端提示日志，使用自定义日志
     openai:
-      api-key: "sk-vcqgdvzbcchptznjpgcsyrfzrclvuvsidsrdpoyadgzgmtpg"
-      base-url: https://api.siliconflow.cn
       chat:
+        api-key: "sk-vcqgdvzbcchptznjpgcsyrfzrclvuvsidsrdpoyadgzgmtpg"   # 可独立设置生成模型的API密钥
+        base-url: https://api.siliconflow.cn   # 可改为生成模型专属域名
         options:
           model: Pro/deepseek-ai/DeepSeek-V3.1-Terminus
           timeout: 60s        # 增加超时时间到60秒
-          max-retries: 3      # 设置最大重试次数
+          max-retries: 3
+          temperature: 0.7
+          max-tokens: 2048
       embedding:
+        api-key: "sk-vcqgdvzbcchptznjpgcsyrfzrclvuvsidsrdpoyadgzgmtpg"   # 可独立设置嵌入模型的API密钥
+        base-url: https://api.siliconflow.cn   # 可改为嵌入模型专属域名
         options:
           model: BAAI/bge-large-zh-v1.5
           timeout: 60s        # 嵌入模型超时时间
           max-retries: 5      # 嵌入模型重试次数
 
-    vectorstore:
-      elasticsearch:
-        initialize-schema: true
-        index-name: customer_support_qa_ik  # 使用支持IK分词器的索引
+    # vectorstore.elasticsearch 配置已废弃，统一改为 retrieval.vector
+
+    retrieval:
+      vector:
+        index-name: customer_support_qa_ik
         similarity: cosine
         dimensions: 1024
+
 
     rag:
       query-rewrite:
         enabled: false  # 启用查询重写功能
       retriever:
-        type: vector  # 可选值: hybrid, vector, bm25
+        type: vector  # 可选值: hybrid, vector, bm25（验证内存保留时避免外部嵌入依赖）
       hybrid:
         top-k: 5
         rrf-k: 60
+        weight:
+          bm25: 1.0
+          vector: 1.0
       bm25:
         top-n: 5
+        boost: 1.2
+        k1: 1.2
+        b: 0.75
       vector:
         top-k: 5
         similarity-threshold: 0.85
@@ -75,20 +74,19 @@ app:
   
   # 知识库初始化配置
   knowledge-base:
-    init-data: true       # 启用知识库数据初始化
-    clear-existing: true  # 清除现有数据
-    load-excel: true      # 启用Excel数据加载
+    init-data: false      # 知识库数据初始化
+    clear-existing: false # 清除现有数据
+    load-excel: false     # Excel数据加载
   
 
   
   # 安全配置
   security:
     input-check:
-      enabled: true  # 启用输入安全检查
+      enabled: false  # 启用输入安全检查
     output-check:
-      enabled: true  # 启用输出安全检查
+      enabled: false  # 启用输出安全检查
 
 management:
   tracing:
-    sampling:
-      probability: 1.0
+    enabled: false        # 完全关闭链路追踪，节省资源
