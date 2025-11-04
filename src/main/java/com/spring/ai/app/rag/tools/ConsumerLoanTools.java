@@ -85,41 +85,17 @@ public class ConsumerLoanTools {
     public String generateLoanOffers(String userId, UserContext userContext, Double amount, Integer termMonths, String purpose) {
         logger.info("Generating loan offers for authorized user: {}, amount: {}, term: {}, purpose: {}",
                 userId, amount, termMonths, purpose);
-
         try {
             // 构建借款方案
             Map<String, Object> offerData = new HashMap<>();
-
             // 设置默认值
             double finalAmount = amount != null ? amount : 50000.0;
             int finalTerm = termMonths != null ? termMonths : 12;
-
-            // 计算利率和还款信息
-            double annualRate = 0.0375; // 3.75%的年利率
-            double monthlyRate = annualRate / 12;
-
-            // 使用等额本息计算月供
-            double monthlyPayment = finalAmount * monthlyRate * Math.pow(1 + monthlyRate, finalTerm)
-                    / (Math.pow(1 + monthlyRate, finalTerm) - 1);
-
-            // 计算总利息
-            double totalInterest = monthlyPayment * finalTerm - finalAmount;
-
             // 构建完整的借款方案数据
             offerData.put("amount", finalAmount);
-            offerData.put("rate", annualRate * 100); // 转换为百分比
             offerData.put("term", finalTerm);
-            offerData.put("monthlyPayment", (int) monthlyPayment);
-            offerData.put("totalInterest", (int) totalInterest);
-            offerData.put("tag", "推荐");
-            offerData.put("bankName", "建设银行");
-            offerData.put("repayMode", "等额本息");
             offerData.put("purpose", purpose != null ? purpose : "个人消费");
-            offerData.put("bankTail", "1123");
-            offerData.put("discountText", "查看优惠");
-            offerData.put("firstPayment", (int) monthlyPayment);
-            offerData.put("lender", "建设银行");
-            offerData.put("annualRate", annualRate * 100);
+            offerData.put("content","为您推荐如下借款方案，若与您的需求不符，您可以直接在卡片上修改，或者告诉我您的需求，例如，您可以对我说我要借500元或者我要分12期等等。");
             return objectMapper.writeValueAsString(offerData);
 
         } catch (Exception e) {

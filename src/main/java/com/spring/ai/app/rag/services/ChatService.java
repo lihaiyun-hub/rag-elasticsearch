@@ -65,17 +65,20 @@ public class ChatService {
      */
     public String chat(String chatId, String userMessage, UserContext userContext) {
         String userId = userContext != null ? userContext.getUserName() : chatId;
-
+        List<Message> history = chatMemory.get(chatId);
         try {
             // 1. 输入安全检查和清理
             String sanitizedInput = promptInjectionFilter.sanitizeInput(userMessage);
             if (sanitizedInput == null || sanitizedInput.trim().isEmpty()) {
                 return "请输入您的问题，我将为您提供帮助。";
             }
-            // 若该会话首条用户输入仅为数字，则为首句自动加“借”前缀
-            sanitizedInput = maybeAutoPrefixBorrowIfFirstNumericSentence(chatId, sanitizedInput);
-            // 2. 取出本会话历史（可选：拼到 prompt 里）
-            List<Message> history = chatMemory.get(chatId);
+            // 2. 数字输入校验与转换（抽取为独立方法）
+            NumericInputCheckResult numericCheck = applyNumericInputRules(chatId, history, sanitizedInput);
+            if (numericCheck.getEarlyResponse() != null) {
+                // 已在方法内记录对话历史，这里直接返回早期提示
+                return numericCheck.getEarlyResponse();
+            }
+            sanitizedInput = numericCheck.getProcessedInput();
 
             // 3. 检索：将“最新query + 历史对话”交给检索层处理（包含增强查询与批量检索）
             Query retrievalQuery = new Query(sanitizedInput, Map.of("history", history), chatId);
@@ -157,13 +160,80 @@ public class ChatService {
         }
     }
 
+    /**
+     * 数字输入校验与转换的总控方法（抽取自 chat() 中的逻辑片段）。
+     *
+     * 处理顺序与规则说明：
+     * 1) 首条纯数字：若该会话的首个用户消息的第一句仅包含数字，则在该句前自动加上“借”前缀。
+     *    - 例如："1000" → "借1000"；"1000。我要分期" → "借1000。我要分期"。
+     *    - 第一句的边界以常见标点或换行符判定：。！？.!?\n\r。
+     * 2) 非首条且纯数字的早期提示：
+     *    - 若输入为纯数字且在 16..99 之间，返回提示语，要求用户重新输入需求，避免无效金额或分期数。
+     *    - 在触发提示时，本方法会统一写入对话历史（用户输入与助手提示），并通过 earlyResponse 返回。
+     * 3) 非首条且纯数字的转换：
+     *    - 1..15 → 转为“分{n}期”；>100 → 前缀为“借{n}”。
+     *    - 其余情况（含 0、<=15 非正、=100、非数字）保持原样。
+     *
+     * 返回值约定：
+     * - 若需要直接提示用户（早退），则 earlyResponse 非空，processedInput 为触发提示时的用户输入版本；
+     * - 若不需要早退，则 earlyResponse 为空，processedInput 为校验/转换后的输入。
+     *
+     * 设计说明：
+     * - 抽取为独立方法，便于集中维护数字相关的业务规则，减少 chat() 的分支复杂度；
+     * - 本方法内部负责在早退场景下统一记录聊天历史，调用方只需根据 earlyResponse 是否为空决定是否返回即可。
+     */
+    private NumericInputCheckResult applyNumericInputRules(String chatId, List<Message> history, String input) {
+        try {
+            // Step 1: 首条纯数字 → 第一句自动加“借”前缀
+            String updated = maybeAutoPrefixBorrowIfFirstNumericSentence(history, input);
+
+            // Step 2: 非首条且纯数字 → 16..99 返回早期提示（并写入聊天历史）
+            String earlyResponse = maybeEarlyResponseForNonFirstNumericInput(history, updated);
+            if (earlyResponse != null) {
+                chatMemory.add(chatId, Message.builder().type(Message.Type.USER).content(updated).build());
+                chatMemory.add(chatId, Message.builder().type(Message.Type.ASSISTANT).content(earlyResponse).build());
+                return new NumericInputCheckResult(updated, earlyResponse);
+            }
+
+            // Step 3: 非首条且纯数字 → 1..15 转“分{n}期”；>100 转“借{n}”
+            updated = maybeTransformNonFirstNumericInput(history, updated);
+            return new NumericInputCheckResult(updated, null);
+        } catch (Exception e) {
+            // 任何异常均不影响主流程，返回原始输入以保证稳健性
+            logger.debug("数字输入校验与转换失败，回退到原始输入: {}", e.toString());
+            return new NumericInputCheckResult(input, null);
+        }
+    }
+
+    /**
+     * 抽取方法的返回封装：
+     * - processedInput：校验/转换后的输入（或原始输入，取决于规则触发）
+     * - earlyResponse：当需要直接给出提示并早退时的助手回复；否则为 null
+     */
+    private static class NumericInputCheckResult {
+        private final String processedInput;
+        private final String earlyResponse;
+
+        private NumericInputCheckResult(String processedInput, String earlyResponse) {
+            this.processedInput = processedInput;
+            this.earlyResponse = earlyResponse;
+        }
+
+        public String getProcessedInput() {
+            return processedInput;
+        }
+
+        public String getEarlyResponse() {
+            return earlyResponse;
+        }
+    }
+
 
     /**
      * 若该会话是用户的首条输入，且第一句仅为数字，则在前面加“借”。
      */
-    private String maybeAutoPrefixBorrowIfFirstNumericSentence(String chatId, String input) {
+    private String maybeAutoPrefixBorrowIfFirstNumericSentence(List<Message> history, String input) {
         try {
-            List<Message> history = chatMemory.get(chatId);
             boolean firstUserInput = true;
             if (history != null) {
                 for (Message m : history) {
@@ -195,6 +265,84 @@ public class ChatService {
             }
         } catch (Exception e) {
             logger.debug("前缀修正跳过，原因: {}", e.toString());
+        }
+        return input;
+    }
+
+    /**
+     * 非首条用户输入且仅为数字：
+     * - 16..99：返回提示，要求重新输入
+     * - 其他：不在此处处理（交由转换方法或原样）
+     */
+    private String maybeEarlyResponseForNonFirstNumericInput(List<Message> history, String input) {
+        try {
+            boolean hasPriorUser = false;
+            if (history != null) {
+                for (Message m : history) {
+                    if (m != null && m.getType() == Message.Type.USER) {
+                        hasPriorUser = true;
+                        break;
+                    }
+                }
+            }
+            if (!hasPriorUser) {
+                return null;
+            }
+
+            String trimmed = input == null ? "" : input.trim();
+            if (!trimmed.matches("\\d+")) {
+                return null; // 不是“只包含数字”
+            }
+            int n = Integer.parseInt(trimmed);
+            if (n > 15 && n < 100) {
+                String msg = "借款金额不得小于100，可选分期数为[]，请重新输入需求。";
+                logger.info("数值输入规则触发：n={}，提示用户重新输入", n);
+                return msg;
+            }
+        } catch (Exception e) {
+            logger.debug("非首条数值输入提示跳过，原因: {}", e.toString());
+        }
+        return null;
+    }
+
+    /**
+     * 非首条用户输入且仅为数字：
+     * - 1..15：转换为“分{n}期”
+     * - >100：前缀“借{n}”
+     * - 其他（含0、<=15且非正、=100、非数字）：原样返回
+     */
+    private String maybeTransformNonFirstNumericInput(List<Message> history, String input) {
+        try {
+            boolean hasPriorUser = false;
+            if (history != null) {
+                for (Message m : history) {
+                    if (m != null && m.getType() == Message.Type.USER) {
+                        hasPriorUser = true;
+                        break;
+                    }
+                }
+            }
+            if (!hasPriorUser) {
+                return input;
+            }
+
+            String trimmed = input == null ? "" : input.trim();
+            if (!trimmed.matches("\\d+")) {
+                return input; // 不是“只包含数字”
+            }
+            int n = Integer.parseInt(trimmed);
+            if (n > 0 && n <= 15) {
+                String updated = "分" + n + "期";
+                logger.info("数值输入转换：n={} -> {}", n, updated);
+                return updated;
+            }
+            if (n > 100) {
+                String updated = "借" + n;
+                logger.info("数值输入转换：n={} -> {}", n, updated);
+                return updated;
+            }
+        } catch (Exception e) {
+            logger.debug("非首条数值输入转换跳过，原因: {}", e.toString());
         }
         return input;
     }
