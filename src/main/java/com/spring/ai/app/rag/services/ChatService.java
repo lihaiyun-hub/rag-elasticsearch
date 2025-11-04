@@ -72,8 +72,8 @@ public class ChatService {
             if (sanitizedInput == null || sanitizedInput.trim().isEmpty()) {
                 return "请输入您的问题，我将为您提供帮助。";
             }
-            // 2. 数字输入校验与转换（抽取为独立方法）
-            NumericInputCheckResult numericCheck = applyNumericInputRules(chatId, history, sanitizedInput);
+            // 2. 数字输入校验与转换（抽取为独立方法，含授信判断）
+            NumericInputCheckResult numericCheck = applyNumericInputRules(chatId, userId, userContext, history, sanitizedInput);
             if (numericCheck.getEarlyResponse() != null) {
                 // 已在方法内记录对话历史，这里直接返回早期提示
                 return numericCheck.getEarlyResponse();
@@ -164,6 +164,8 @@ public class ChatService {
      * 数字输入校验与转换的总控方法（抽取自 chat() 中的逻辑片段）。
      *
      * 处理顺序与规则说明：
+     * 0) 授信拦截（仅在“未授信且用户输入为纯数字”时触发）：
+     *    - 未授信且输入为纯数字 → 直接开启授信流程并早退；非纯数字则继续后续校验与转换。
      * 1) 首条纯数字：若该会话的首个用户消息的第一句仅包含数字，则在该句前自动加上“借”前缀。
      *    - 例如："1000" → "借1000"；"1000。我要分期" → "借1000。我要分期"。
      *    - 第一句的边界以常见标点或换行符判定：。！？.!?\n\r。
@@ -182,8 +184,19 @@ public class ChatService {
      * - 抽取为独立方法，便于集中维护数字相关的业务规则，减少 chat() 的分支复杂度；
      * - 本方法内部负责在早退场景下统一记录聊天历史，调用方只需根据 earlyResponse 是否为空决定是否返回即可。
      */
-    private NumericInputCheckResult applyNumericInputRules(String chatId, List<Message> history, String input) {
+    private NumericInputCheckResult applyNumericInputRules(String chatId, String userId, UserContext userContext, List<Message> history, String input) {
         try {
+            // Step 0: 授信状态优先级判断（仅拦截纯数字输入）
+            String trimmed = input == null ? "" : input.trim();
+            boolean isDigitsOnly = trimmed.matches("\\d+");
+            boolean authorized = resolveAuthorized(userContext);
+            if (!authorized && isDigitsOnly) {
+                String early = consumerLoanTools.handleApplyCreditLimit(userId, userContext);
+                chatMemory.add(chatId, Message.builder().type(Message.Type.USER).content(input).build());
+                chatMemory.add(chatId, Message.builder().type(Message.Type.ASSISTANT).content(early).build());
+                return new NumericInputCheckResult(input, early);
+            }
+
             // Step 1: 首条纯数字 → 第一句自动加“借”前缀
             String updated = maybeAutoPrefixBorrowIfFirstNumericSentence(history, input);
 
