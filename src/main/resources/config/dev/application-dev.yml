@@ -74,9 +74,9 @@ app:
   
   # 知识库初始化配置
   knowledge-base:
-    init-data: false      # 知识库数据初始化
-    clear-existing: false # 清除现有数据
-    load-excel: false     # Excel数据加载
+    init-data: true      # 知识库数据初始化
+    clear-existing: true # 清除现有数据
+    load-excel: true     # Excel数据加载
   
 
   

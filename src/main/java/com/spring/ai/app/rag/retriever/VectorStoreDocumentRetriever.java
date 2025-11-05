@@ -58,10 +58,15 @@ public class VectorStoreDocumentRetriever implements DocumentRetriever {
         } else {
             queryEmbedding = embeddingService.embed(query.getText());
         }
+        // 从查询元数据中读取期望的 phase，交由 ES 层过滤（默认包含通用缺失字段）
+        String desiredPhase = null;
+        Object phaseObj = (query.getMetadata() != null) ? query.getMetadata().get("phase") : null;
+        if (phaseObj instanceof String) desiredPhase = ((String) phaseObj).trim();
         List<SearchResult> results = vectorStore.search(
                 queryEmbedding,
                 topK,
-                (similarityThreshold > 0.0) ? similarityThreshold : null
+                (similarityThreshold > 0.0) ? similarityThreshold : null,
+                desiredPhase
         );
         List<SearchResult> filtered = new ArrayList<>();
         for (SearchResult r : results) {
@@ -72,9 +77,8 @@ public class VectorStoreDocumentRetriever implements DocumentRetriever {
             }
         }
         try {
-            logger.info("向量召回: 原始={} | 阈值过滤后={}", results.size(), filtered.size());
-        } catch (Exception ignore) {
-        }
+            logger.info("向量召回(ES含phase过滤): 原始={} | 阈值过滤后={}", results.size(), filtered.size());
+        } catch (Exception ignore) {}
         List<Document> docs = new ArrayList<>();
         for (SearchResult r : filtered) {
             docs.add(Document.builder()
@@ -128,8 +132,14 @@ public class VectorStoreDocumentRetriever implements DocumentRetriever {
         // 通过 msearch 批量检索
         Double threshold = (similarityThreshold > 0.0) ? similarityThreshold : null;
         List<SearchResult> tmp; // just for type hint
+        // 为每个查询读取期望的 phase，交由 ES 层过滤
+        List<String> phases = new ArrayList<>(queries.size());
+        for (Query q : queries) {
+            Object po = (q.getMetadata() != null) ? q.getMetadata().get("phase") : null;
+            phases.add(po instanceof String ? ((String) po).trim() : null);
+        }
         List<List<SearchResult>> results =
-                vectorStore.multiKnnSearch(embeddings, topK, threshold);
+                vectorStore.multiKnnSearch(embeddings, topK, threshold, phases);
 
         List<List<Document>> out = new ArrayList<>(results.size());
         for (List<SearchResult> rlist : results) {

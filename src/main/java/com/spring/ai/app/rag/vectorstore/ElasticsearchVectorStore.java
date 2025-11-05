@@ -281,6 +281,50 @@ public class ElasticsearchVectorStore {
         }
     }
 
+    /**
+     * KNN 相似度搜索（支持 minScore 服务端过滤 + phase 过滤）
+     */
+    public List<SearchResult> search(List<Float> queryEmbedding, int k, Double minScore, String phase) {
+        try {
+            var builder = new SearchRequest.Builder();
+            builder.index(indexName);
+            // 使用 knn.filter 将 phase 过滤下推到 ES
+            co.elastic.clients.elasticsearch._types.query_dsl.Query phaseQuery = buildPhaseFilterQuery(phase);
+            var knnBuilder = new co.elastic.clients.elasticsearch._types.KnnQuery.Builder()
+                    .field("embedding")
+                    .queryVector(queryEmbedding)
+                    .k(k)
+                    .numCandidates(Math.max(k * 2, k + 10));
+            if (phaseQuery != null) {
+                knnBuilder.filter(phaseQuery);
+            }
+            builder.knn(knnBuilder.build());
+            if (minScore != null && minScore > 0.0) {
+                builder.minScore(minScore);
+            }
+            SearchRequest request = builder.build();
+
+            SearchResponse<Map> response = elasticsearchClient.search(request, Map.class);
+            List<SearchResult> results = new ArrayList<>();
+            for (var hit : response.hits().hits()) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> source = hit.source();
+                if (source == null) continue;
+                String text = (String) source.get("text");
+                @SuppressWarnings("unchecked")
+                Map<String, Object> metadata = (Map<String, Object>) source.get("metadata");
+                if (metadata == null) metadata = new HashMap<>();
+                metadata.put("score", hit.score());
+                metadata.put("id", hit.id());
+                results.add(new SearchResult(text, metadata));
+            }
+            return results;
+        } catch (IOException e) {
+            logger.error("KNN search (with phase) IO error", e);
+            throw new RuntimeException("Failed to perform KNN search with phase: " + e.getMessage(), e);
+        }
+    }
+
     // 删除重复的内部接口定义，类已提供所需方法
 
     /**
@@ -411,6 +455,103 @@ public class ElasticsearchVectorStore {
             }
             return fallback;
         }
+    }
+
+    /**
+     * 批量 KNN 检索（_msearch）增加 phase 服务端过滤，每个向量可有不同 phase
+     */
+    public List<List<SearchResult>> multiKnnSearch(List<List<Float>> queryEmbeddings, int k, Double minScore, List<String> phases) {
+        if (queryEmbeddings == null || queryEmbeddings.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        try {
+            int numCandidates = Math.max(k * 2, k + 10);
+            java.util.List<co.elastic.clients.elasticsearch.core.msearch.RequestItem> items = new java.util.ArrayList<>(queryEmbeddings.size());
+            for (int i = 0; i < queryEmbeddings.size(); i++) {
+                List<Float> vec = queryEmbeddings.get(i);
+                String phase = (phases != null && i < phases.size()) ? phases.get(i) : null;
+                co.elastic.clients.elasticsearch._types.query_dsl.Query phaseQuery = buildPhaseFilterQuery(phase);
+
+                // 在 knn.filter 中加入 phase 过滤
+                var knnBuilder = new co.elastic.clients.elasticsearch._types.KnnQuery.Builder()
+                        .field("embedding")
+                        .queryVector(vec)
+                        .k(k)
+                        .numCandidates(numCandidates);
+                if (phaseQuery != null) {
+                    knnBuilder.filter(phaseQuery);
+                }
+
+                co.elastic.clients.elasticsearch.core.msearch.RequestItem item =
+                        co.elastic.clients.elasticsearch.core.msearch.RequestItem.of(ri -> ri
+                                .header(h -> h.index(indexName))
+                                .body(b -> b
+                                        .size(k)
+                                        .knn(knnBuilder.build())
+                                        .minScore((minScore != null && minScore > 0.0) ? minScore : null)
+                                )
+                        );
+                items.add(item);
+            }
+
+            MsearchRequest request = MsearchRequest.of(b -> b
+                    .index(indexName)
+                    .searches(items)
+            );
+
+            MsearchResponse<Map> response = elasticsearchClient.msearch(request, Map.class);
+
+            List<List<SearchResult>> all = new ArrayList<>();
+            for (MultiSearchResponseItem<Map> item : response.responses()) {
+                List<SearchResult> results = new ArrayList<>();
+                if (item != null && item.result() != null && item.result().hits() != null) {
+                    for (Hit<Map> hit : item.result().hits().hits()) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> source = hit.source();
+                        if (source == null) continue;
+                        String text = (String) source.get("text");
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> metadata = (Map<String, Object>) source.get("metadata");
+                        if (metadata == null) metadata = new java.util.HashMap<>();
+                        metadata.put("score", hit.score());
+                        metadata.put("id", hit.id());
+                        results.add(new SearchResult(text, metadata));
+                    }
+                }
+                all.add(results);
+            }
+            return all;
+        } catch (Exception e) {
+            logger.warn("_msearch (with phase) 失败，降级为逐条 KNN 检索: {}", e.getMessage());
+            List<List<SearchResult>> fallback = new ArrayList<>(queryEmbeddings.size());
+            for (int i = 0; i < queryEmbeddings.size(); i++) {
+                try {
+                    List<SearchResult> one = this.search(queryEmbeddings.get(i), k, minScore, phases != null && i < phases.size() ? phases.get(i) : null);
+                    fallback.add(one);
+                } catch (Exception ex) {
+                    logger.error("逐条 KNN 检索失败: {}", ex.getMessage());
+                    fallback.add(java.util.Collections.emptyList());
+                }
+            }
+            return fallback;
+        }
+    }
+
+    /**
+     * 构建 phase 过滤查询：包含目标 phase 或缺失 phase（通用）
+     */
+    private co.elastic.clients.elasticsearch._types.query_dsl.Query buildPhaseFilterQuery(String phase) {
+        if (phase == null) return null;
+        String p = phase.trim();
+        if (p.isEmpty()) return null;
+        // 使用 match_phrase 兼容 metadata.phase 为 text 的动态映射
+        return co.elastic.clients.elasticsearch._types.query_dsl.Query.of(q -> q
+                .bool(b -> b
+                        .should(sh -> sh.matchPhrase(mp -> mp.field("metadata.phase").query(p)))
+                        .should(sh -> sh.bool(bb -> bb.mustNot(mn -> mn.exists(e -> e.field("metadata.phase")))))
+                        .minimumShouldMatch("1")
+                )
+        );
     }
 
     /**

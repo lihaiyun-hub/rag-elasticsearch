@@ -80,8 +80,13 @@ public class ChatService {
             }
             sanitizedInput = numericCheck.getProcessedInput();
 
-            // 3. 检索：将“最新query + 历史对话”交给检索层处理（包含增强查询与批量检索）
-            Query retrievalQuery = new Query(sanitizedInput, Map.of("history", history), chatId);
+            // 3. 检索：根据授权状态设置期望的 phase，并将“最新query + 历史对话”交给检索层（包含增强查询与批量检索）
+            boolean authorizedForRetrieval = resolveAuthorized(userContext);
+            String desiredPhase = authorizedForRetrieval ? "post_credit" : "pre_credit";
+            java.util.Map<String, Object> md = new java.util.HashMap<>();
+            md.put("history", history);
+            md.put("phase", desiredPhase);
+            Query retrievalQuery = new Query(sanitizedInput, md, chatId);
             List<Document> documents = documentRetriever.retrieve(retrievalQuery);
             if (documents.isEmpty()) {
                 return "抱歉，未找到相关内容，请换个说法试试。";

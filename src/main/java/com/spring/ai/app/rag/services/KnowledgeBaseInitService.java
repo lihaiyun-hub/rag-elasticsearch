@@ -236,52 +236,59 @@ public class KnowledgeBaseInitService implements CommandLineRunner {
         List<Document> documents = new ArrayList<>();
         String fileName = "意图泛化语料.xlsx";
         String resourcePath = "rag/" + fileName;
-        
+
         try {
             ClassPathResource resource = new ClassPathResource(resourcePath);
             if (!resource.exists()) {
                 logger.warn("资源文件不存在: {}", resourcePath);
                 return documents;
             }
-            
+
             try (InputStream inputStream = resource.getInputStream();
                  XSSFWorkbook workbook = new XSSFWorkbook(inputStream)) {
-                
-                Sheet sheet = workbook.getSheetAt(0);
-                logger.info("开始处理文件: {}，工作表: {}", fileName, sheet.getSheetName());
-                
-                // 跳过标题行，从第二行开始
-                for (int i = 1; i <= sheet.getLastRowNum(); i++) {
-                    Row row = sheet.getRow(i);
-                    if (row == null) continue;
-                    
-                    try {
-                        // Excel列结构：历史提问(0), 最新提问(1), 思考过程(2), 处理(3), 回答(4)
-                        String historyQuestions = getCellValueAsString(row.getCell(0));
-                        String latestQuestion = getCellValueAsString(row.getCell(1));
-                        String cotThinking = getCellValueAsString(row.getCell(2));
-                        String processingMethod = getCellValueAsString(row.getCell(3));
-                        String answer = getCellValueAsString(row.getCell(5));
-                        
-                        // 按格式拼接：历史对话[user:xxx;user:yyy;]最新提问[zzz]
-                        // 仅当最新提问非空时写入
-                        if (latestQuestion != null && !latestQuestion.trim().isEmpty()) {
-                            String augmented = buildAugmentedQueryFromExcel(historyQuestions, latestQuestion);
-                            Document doc = createThinkingProcessDocument(augmented, answer, cotThinking, "", processingMethod, fileName, sheet.getSheetName());
-                            documents.add(doc);
+
+                int sheetCount = workbook.getNumberOfSheets();
+                logger.info("开始处理文件: {}，工作表数量: {}", fileName, sheetCount);
+
+                for (int s = 0; s < sheetCount; s++) {
+                    Sheet sheet = workbook.getSheetAt(s);
+                    String sheetName = sheet.getSheetName();
+                    String phase = resolvePhaseFromSheetName(sheetName);
+                    logger.info("处理工作表: {} | 识别phase: {}", sheetName, phase.isEmpty() ? "(通用)" : phase);
+
+                    // 跳过标题行，从第二行开始
+                    for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                        Row row = sheet.getRow(i);
+                        if (row == null) continue;
+
+                        try {
+                            // Excel列结构：历史提问(0), 最新提问(1), 思考过程(2), 处理(3), 回答(4)
+                            String historyQuestions = getCellValueAsString(row.getCell(0));
+                            String latestQuestion = getCellValueAsString(row.getCell(1));
+                            String cotThinking = getCellValueAsString(row.getCell(2));
+                            String processingMethod = getCellValueAsString(row.getCell(3));
+                            String answer = getCellValueAsString(row.getCell(5));
+
+                            // 按格式拼接：历史对话[user:xxx;user:yyy;]最新提问[zzz]
+                            // 仅当最新提问非空时写入
+                            if (latestQuestion != null && !latestQuestion.trim().isEmpty()) {
+                                String augmented = buildAugmentedQueryFromExcel(historyQuestions, latestQuestion);
+                                Document doc = createThinkingProcessDocument(augmented, answer, cotThinking, "", processingMethod, fileName, sheetName, phase);
+                                documents.add(doc);
+                            }
+                        } catch (Exception e) {
+                            logger.warn("处理工作表 {} 第 {} 行数据时出错: {}", sheetName, i + 1, e.getMessage());
                         }
-                    } catch (Exception e) {
-                        logger.warn("处理第 {} 行数据时出错: {}", i + 1, e.getMessage());
                     }
                 }
-                
+
                 logger.info("从 {} 成功导入 {} 条记录", fileName, documents.size());
             }
-            
+
         } catch (Exception e) {
             logger.error("读取文件 {} 时出错: {}", fileName, e.getMessage(), e);
         }
-        
+
         return documents;
     }
 
@@ -289,7 +296,7 @@ public class KnowledgeBaseInitService implements CommandLineRunner {
     /**
      * 创建思考过程文档
      */
-    private Document createThinkingProcessDocument(String question, String answer, String cotThinking, String intent, String processingMethod, String fileName, String sheetName) {
+    private Document createThinkingProcessDocument(String question, String answer, String cotThinking, String intent, String processingMethod, String fileName, String sheetName, String phase) {
         Map<String, Object> metadata = new HashMap<>();
         metadata.put("query", question);
         metadata.put("processing_type", processingMethod != null ? processingMethod : "直接回答");
@@ -299,11 +306,28 @@ public class KnowledgeBaseInitService implements CommandLineRunner {
         metadata.put("type", "excel_thinking_data");
         metadata.put("sheet_name", sheetName);
         metadata.put("intent", intent != null ? intent : "");
+        // 通用文档不写入 phase 字段，避免 ES 侧无法命中空字符串
+        if (phase != null && !phase.trim().isEmpty()) {
+            metadata.put("phase", phase.trim());
+        }
         
         // 文档内容只使用question，用于向量检索
         String content = question;
         
         return new Document(content, metadata);
+    }
+
+    /**
+     * 根据工作表名称解析 phase：
+     * 已授信 -> post_credit；未授信 -> pre_credit；通用/其他 -> ""
+     */
+    private String resolvePhaseFromSheetName(String sheetName) {
+        if (sheetName == null) return "";
+        String name = sheetName.trim();
+        if (name.contains("已授信")) return "post_credit";
+        if (name.contains("未授信")) return "pre_credit";
+        // 显式通用或任何其他名称均视为通用
+        return "";
     }
     
     /**
