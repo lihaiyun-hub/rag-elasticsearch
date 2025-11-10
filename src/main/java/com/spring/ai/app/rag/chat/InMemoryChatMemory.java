@@ -2,6 +2,7 @@ package com.spring.ai.app.rag.chat;
 
 import com.spring.ai.app.rag.model.Message;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -12,6 +13,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * 内存版聊天历史存储（按 conversation_id 隔离）
  */
 @Component
+@ConditionalOnProperty(prefix = "spring.ai.chat.memory", name = "backend", havingValue = "memory", matchIfMissing = true)
 public class InMemoryChatMemory implements ChatMemory {
 
     /* 每个 conversation 对应一个线程安全的消息列表 */

@@ -7,10 +7,10 @@ from uuid import uuid4
 import requests
 
 
-def clear_history(base_url: str, conversation_id: str):
+def clear_history(base_url: str, conversation_id: str, tenant_code: str):
     r = requests.delete(
         f"{base_url}/api/assistant/history",
-        params={"conversationId": conversation_id},
+        params={"conversationId": conversation_id, "tenantCode": tenant_code},
         timeout=10,
     )
     if r.status_code >= 400:
@@ -38,10 +38,10 @@ def chat(base_url: str, session_id: str, query: str, user_id: str = "u1") -> str
     return r.text
 
 
-def get_history(base_url: str, conversation_id: str):
+def get_history(base_url: str, conversation_id: str, tenant_code: str):
     r = requests.get(
         f"{base_url}/api/assistant/history",
-        params={"conversationId": conversation_id},
+        params={"conversationId": conversation_id, "tenantCode": tenant_code},
         timeout=10,
     )
     if r.status_code >= 400:
@@ -59,8 +59,9 @@ def main():
     base_url = args.base.rstrip("/")
     conv_id = args.conversation
 
-    print(f"[STEP] 清空历史: conversationId={conv_id}")
-    clear_history(base_url, conv_id)
+    tenant = "t1"
+    print(f"[STEP] 清空历史: conversationId={conv_id}, tenantCode={tenant}")
+    clear_history(base_url, conv_id, tenant)
 
     # 使用知识库中已配置为“直接回答”的问题，避免触发外部LLM调用
     queries = [
@@ -81,7 +82,7 @@ def main():
         time.sleep(0.5)
 
     print("[STEP] 获取历史")
-    history = get_history(base_url, conv_id)
+    history = get_history(base_url, conv_id, tenant)
     count = len(history)
     print(f"[RESULT] 历史消息条数: {count}")
 

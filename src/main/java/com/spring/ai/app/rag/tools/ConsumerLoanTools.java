@@ -1,25 +1,45 @@
 package com.spring.ai.app.rag.tools;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import cn.hutool.core.util.ObjectUtil;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.spring.ai.app.rag.cache.RedisHashCache;
+import com.spring.ai.app.rag.model.ChatVO;
+import com.spring.ai.app.rag.model.LoanResponseDTO;
 import com.spring.ai.app.rag.model.UserContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.time.LocalDate;
+import java.util.*;
 
 @Component
 public class ConsumerLoanTools {
 
     private static final Logger logger = LoggerFactory.getLogger(ConsumerLoanTools.class);
-    private final ObjectMapper objectMapper;
+    private final RedisHashCache redisHashCache;
+    private static final String MSG_CLARIFY_PREFIX = "为了为您生成合适的借款方案，请补充：";
+    private static final String MSG_NO_PARAMS_DETECTED = "当前未检测到需要澄清的参数，如需生成方案请提供金额、期限或用途信息。";
+    private static final String MSG_CLARIFY_FALLBACK = "为了为你生成合适的借款方案，请补充：借款金额（元）、借款期限（月）、借款用途。";
+
+    private static final String MSG_OFFER_CONTENT = "为您推荐如下借款方案，若与您的需求不符，您可以直接在卡片上修改，或者告诉我您的需求，例如，您可以对我说我要借500元或者我要分12期等等。";
+    private static final String MSG_OFFER_ERROR = "生成借款方案失败，请稍后再试";
+
+    private static final String MSG_QUERY_LIMIT_FMT = "您当前的可用额度为 %s。您要借多少呢？";
+    private static final String MSG_QUERY_ERROR = "抱歉，查询额度时出现问题，请稍后再试。";
+
+    private static final String MSG_APPLY_CREDIT_START = "好的，已为您开启授信申请流程。接下来需要完成实名校验与必要信息采集，以评估您的可用额度";
+    private static final String MSG_APPLY_CREDIT_ERROR = "抱歉，开启授信流程时出现问题，请稍后再试。";
 
 
-    public ConsumerLoanTools(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
+    //单笔最大可借金额
+    private static final double MAXIMUM_SINGLE_BORROWABLE_AMOUNT = 50000.0;
+    //单笔最小可借金额
+    private static final double MINIMUM_SINGLE_BORROWABLE_AMOUNT = 100.0;
+    private static final double ROUND_UNIT = 100.0;
+
+    public ConsumerLoanTools( RedisHashCache redisHashCache) {
+        this.redisHashCache = redisHashCache;
     }
 
     // 从参数 Map 解析金额、期限、用途
@@ -37,7 +57,7 @@ public class ConsumerLoanTools {
             parsed.put("amount", amount);
         }
 
-        // 期数（兼容旧参数名：installments）
+        // 期数
         Object termObj = params != null ? params.get("term") : null;
         Integer term = parseTermField(termObj);
         if (term != null) {
@@ -55,108 +75,220 @@ public class ConsumerLoanTools {
     }
 
 
-    // 重载：接收 Map 参数，内置澄清判断；当某字段为布尔/字符串 "true" 时直接返回澄清话术
-    public String generateLoanOffers(String userId, UserContext userContext, Map<String, Object> parameters) {
-        try {
-            boolean askAmount = needsClarification(parameters != null ? parameters.get("amount") : null);
-            boolean askTerm = needsClarification(parameters != null ? parameters.get("term") : null);
-            boolean askPurpose = needsClarification(parameters != null ? parameters.get("purpose") : null);
+    private String clarification(Map<String, Object> parameters) {
+        boolean askAmount = needsClarification(parameters != null ? parameters.get("amount") : null);
+        boolean askTerm = needsClarification(parameters != null ? parameters.get("term") : null);
+        boolean askPurpose = needsClarification(parameters != null ? parameters.get("purpose") : null);
+        if (askAmount || askTerm || askPurpose) {
+            return buildClarificationMessage(askAmount, askTerm, askPurpose);
+        }
+        return null;
+    }
 
-            if (askAmount || askTerm || askPurpose) {
-                return buildClarificationMessage(askAmount, askTerm, askPurpose);
+
+    // 重载：接收 Map 参数，内置澄清判断；当某字段为布尔/字符串 "true" 时直接返回澄清话术
+    public ChatVO generateLoanOffers(UserContext userContext, Map<String, Object> parameters) {
+
+        try {
+            String cacheKey = buildCacheKey(userContext);
+            Map<String, String> fields = redisHashCache.hEntries(cacheKey);
+            // 校验当前用户是否有可用额度
+            String maxPriceStr = fields.get("maxPrice");
+            if (ObjectUtil.isEmpty(maxPriceStr) || Double.parseDouble(maxPriceStr.trim()) <= 0) {
+                return new ChatVO("您暂无可用额度");
+            }
+            Double credit = Double.parseDouble(maxPriceStr);
+            // offer_count>0 时，说明用户已生成过借款方案
+            int offerCount = Integer.parseInt(ObjectUtil.isEmpty(fields.get("offer_count")) ? "0" : fields.get("offer_count"));
+            Map<String, Object> parsed = parseLoanParameters(parameters);
+            String contractNum = fields.get("contractNum");
+            List<Integer> termOptions = redisHashCache.hGetJson(cacheKey, "terms_json", new TypeReference<>() {
+            });
+
+            Double amount = null;
+            Integer termMonths = null;
+            String purpose = null;
+
+            if (offerCount > 0) {
+                // 对用户意图进行澄清
+                String clarification = clarification(parameters);
+                if (clarification != null) {
+                    return new ChatVO(clarification);
+                }
+                // 金额：若当前轮次对话未指定，使用历史 price 字段值
+                amount = ObjectUtil.isEmpty(parsed.get("amount")) ? Double.parseDouble(fields.get("price").trim()) : (Double) parsed.get("amount");
+                // 期数：若当前轮次对话未指定，使用历史 term 字段值
+                termMonths = ObjectUtil.isEmpty(parsed.get("term")) ? Integer.parseInt(fields.get("term").trim()) : (Integer) parsed.get("term");
+                // 用途：若当前轮次对话未指定，使用历史 loanPurseCode 字段值
+                purpose = ObjectUtil.isEmpty(parsed.get("purpose")) ? fields.get("loanPurseCode") : (String) parsed.get("purpose");
+
+            } else {
+                // 金额：若当前轮次对话未指定，根据历史借款记录计算平均借款金额
+                amount = ObjectUtil.isEmpty(parsed.get("amount")) ? getAvgPrice(fetchRecentBorrowRecords(contractNum, UUID.randomUUID().toString()), credit) : (Double) parsed.get("amount");
+                // 期数：若当前轮次对话未指定，使用历史借款记录中频率最高的期数
+                termMonths = ObjectUtil.isEmpty(parsed.get("term")) ? getModeTerm(fetchRecentBorrowRecords(contractNum, UUID.randomUUID().toString()), termOptions) : (Integer) parsed.get("term");
+                // 用途：若当前轮次对话未指定，使用缓存中的数据
+                purpose = ObjectUtil.isEmpty(parsed.get("purpose")) ? fields.get("loanPurseCode") : (String) parsed.get("purpose");
+            }
+            String content = MSG_OFFER_CONTENT;
+            // 借款金额小于100,取100
+            if (amount < MINIMUM_SINGLE_BORROWABLE_AMOUNT) {
+                amount = 100.0;
+                content = "单笔借款金额不能小于100元，您的借款金额已调整为100元";
             }
 
-            Map<String, Object> parsed = parseLoanParameters(parameters);
-            Double amount = (Double) parsed.get("amount");
-            Integer termMonths = (Integer) parsed.get("term");
-            String purpose = (String) parsed.get("purpose");
-            return generateLoanOffers(userId, userContext, amount, termMonths, purpose);
+            // 借款金额大于最大可用额度，取最大可用额度
+            if (amount > credit) {
+                amount = credit;
+                content = "单笔借款金额不能大于您的最大可用额度" + credit + "元，您的借款金额已调整为" + credit + "元";
+            }
+            // 借款金额大于单笔最大可借金额，取单笔最大可借金额
+            if (amount > MAXIMUM_SINGLE_BORROWABLE_AMOUNT) {
+                amount = MAXIMUM_SINGLE_BORROWABLE_AMOUNT;
+                content = "单笔借款金额不能大于单笔最大可借金额" + MAXIMUM_SINGLE_BORROWABLE_AMOUNT + "元，您的借款金额已调整为" + MAXIMUM_SINGLE_BORROWABLE_AMOUNT + "元";
+            }
+            // 借款金额必须是100的整数倍
+            if (amount % ROUND_UNIT != 0) {
+                amount = Math.round(amount / ROUND_UNIT) * ROUND_UNIT;
+                content = "借款金额必须是100的整数倍，您的借款金额已调整为" + amount + "元";
+            }
+            // 借款期数不在可选分期选项中，取最近的一个
+            if (!termOptions.contains(termMonths)) {
+                Integer finalTermMonths = termMonths;
+                termMonths = termOptions.stream().min(Comparator.comparingInt(i -> Math.abs(i - finalTermMonths))).orElse(termOptions.get(0));
+                content = "借款期数不在可选分期选项中，您的借款期数已调整为" + termMonths + "月";
+            }
+            logger.info("Generating loan offers for authorized user: {}, amount: {}, term: {}, purpose: {}", userContext.getUserId(), amount, termMonths, purpose);
+            ChatVO loanOffer = generateLoanOffers(amount, termMonths, purpose);
+            loanOffer.setContent(content);
+            // 生成成功后，更新缓存中的 offer_count（用于下次判断是否为首次）
+            redisHashCache.hPut(cacheKey, "offer_count", String.valueOf(offerCount + 1));
+            return loanOffer;
         } catch (Exception e) {
             logger.error("Failed to generateLoanOffers with parameters (with clarification check)", e);
-            return "为了为你生成合适的借款方案，请补充：借款金额（元）、借款期限（月）、借款用途。";
+            ChatVO vo = new ChatVO();
+            vo.setContent(MSG_CLARIFY_FALLBACK);
+            return vo;
         }
     }
 
-    /**
-     * 为已授信用户生成借款方案
-     * 当用户已授信并表达借款意愿时调用
-     * 支持参数化生成：可指定金额、期数、用途等参数
-     */
-    public String generateLoanOffers(String userId, UserContext userContext, Double amount, Integer termMonths, String purpose) {
-        logger.info("Generating loan offers for authorized user: {}, amount: {}, term: {}, purpose: {}",
-                userId, amount, termMonths, purpose);
+
+    private static String buildCacheKey(UserContext userContext) {
+        String tenant = userContext != null ? userContext.getTenantCode() : null;
+        String sessionId = userContext != null ? userContext.getSessionId() : null;
+        String storageId = (tenant != null && !tenant.isBlank()) ? (tenant + ":" + sessionId) : sessionId;
+        return storageId != null ? ("loaninfo:" + storageId) : null;
+    }
+
+
+    public ChatVO generateLoanOffers(Double amount, Integer termMonths, String purpose) {
+
         try {
-            // 构建借款方案
-            Map<String, Object> offerData = new HashMap<>();
             // 设置默认值
             double finalAmount = amount != null ? amount : 50000.0;
             int finalTerm = termMonths != null ? termMonths : 12;
-            // 构建完整的借款方案数据
-            offerData.put("amount", finalAmount);
-            offerData.put("term", finalTerm);
-            offerData.put("purpose", purpose != null ? purpose : "个人消费");
-            offerData.put("content","为您推荐如下借款方案，若与您的需求不符，您可以直接在卡片上修改，或者告诉我您的需求，例如，您可以对我说我要借500元或者我要分12期等等。");
-            return objectMapper.writeValueAsString(offerData);
+            LoanResponseDTO loan = new LoanResponseDTO();
+            loan.setPrice(String.valueOf(finalAmount));
+            loan.setTerm(String.valueOf(finalTerm));
+            loan.setLoanPurseCode(purpose);
+            ChatVO vo = new ChatVO();
+            vo.setTypeCode(1); // 标记为卡片回复，便于上层判断
+            vo.setContent(MSG_OFFER_CONTENT);
+            vo.setLoanInfo(loan);
+            return vo;
 
         } catch (Exception e) {
-            logger.error("Failed to generate loan offers for user: {}", userId, e);
-            return "{\"error\":\"生成借款方案失败，请稍后再试\"}";
+            ChatVO vo = new ChatVO();
+            vo.setContent(MSG_OFFER_ERROR);
+            return vo;
+        }
+    }
+
+
+    /**
+     * 查询用户最近的借款记录（示例方法，待接入真实API）。
+     * 按照合同编号查询，并在调用处按180天过滤。
+     */
+    private List<BorrowRecord> fetchRecentBorrowRecords(String contractNum, String uuid) {
+        // TODO: 接入外部服务：通过合同编号查询历史借款记录
+        // 返回字段至少包含借款金额、分期与借款日期
+        return List.of();
+    }
+
+    /**
+     * 简化的借款记录结构（示例）
+     */
+    private static class BorrowRecord {
+        double amount;
+        int term;
+        LocalDate date;
+
+        BorrowRecord(double amount, int term, LocalDate date) {
+            this.amount = amount;
+            this.term = term;
+            this.date = date;
         }
     }
 
     /**
-     * 借款申请（意图处理）
-     * 当用户有借款意图：
-     * - 已授信：生成借款方案卡片；
-     * - 未授信：提示需先申请额度；如同意，请回复“申请额度”。
+     * 首次推荐：仅根据最近180天的借款记录给出金额与推荐，不覆盖用户已明确的参数。
+     * 返回更新后的金额
      */
-    public String handleLoanApplicationIntent(String userId, UserContext userContext, Map<String, Object> parameters) {
-        try {
-            Boolean authorized = userContext != null ? userContext.getAuthorized() : null;
-            if (Boolean.TRUE.equals(authorized)) {
-                return generateLoanOffers(userId, userContext, parameters);
-            }
-            return "您当前尚未授信可用额度。如需获取额度，请先进行申请。如果同意，请回复：申请额度。";
-        } catch (Exception e) {
-            logger.error("handleLoanApplicationIntent failed for user: {}", userId, e);
-            return "抱歉，处理借款申请时出现问题，请稍后再试。";
-        }
+    private double getAvgPrice(List<BorrowRecord> recent, Double credit) {
+        // todo 1.校验是否存在历史借款记录
+        // 2.如果不存在，取最高额度
+        // 3.如果存在，取历史记录中金额的平均值
+        // 4.比较平均值与最高额度，取较小值
+        return credit;
     }
+
+    /**
+     * 首次推荐：仅根据最近180天的借款记录给出分期推荐，不覆盖用户已明确的参数。
+     * 返回更新后的金额
+     */
+    private int getModeTerm(List<BorrowRecord> recent, List<Integer> termOptions) {
+        // todo 1.校验是否存在历史借款记录
+        // 2.如果不存在，取可选期数中的最大值
+        // 3.如果存在，取历史记录中分期的众数
+        // 4.如果众数不在可选期数中，取可选期数中的最大值
+        return termOptions.get(0);
+    }
+
 
     /**
      * 查询额度
      * - 已授信：返回具体额度话术；
-     * - 未授信：提示需先申请额度；如同意，请回复“申请额度”。
      */
-    public String handleQueryCreditLimit(String userId, UserContext userContext) {
+    public ChatVO handleQueryCreditLimit(UserContext userContext) {
         try {
             Double credit = userContext.getAvailableCredit();
             String amountStr = String.format("¥%,.0f", credit);
-            return "您当前的可用额度为 " + amountStr + "。您要借多少呢？";
+            ChatVO vo = new ChatVO();
+            vo.setContent(String.format(MSG_QUERY_LIMIT_FMT, amountStr));
+            return vo;
         } catch (Exception e) {
-            logger.error("handleQueryCreditLimit failed for user: {}", userId, e);
-            return "抱歉，查询额度时出现问题，请稍后再试。";
+            logger.error("handleQueryCreditLimit failed for user: {}", userContext.getUserId(), e);
+            ChatVO vo = new ChatVO();
+            vo.setContent(MSG_QUERY_ERROR);
+            return vo;
         }
     }
 
-    /**
-     * 查询额度（对外方法，与 ChatService 调用名对齐）
-     * 包装调用 handleQueryCreditLimit，保持命名一致性。
-     */
-    public String queryCreditLimit(String userId, UserContext userContext) {
-        return handleQueryCreditLimit(userId, userContext);
-    }
 
     /**
      * 申请额度（开启授信流程）
      * 当用户回复“申请额度”时，开启授信流程并返回对应话术。
      */
-    public String handleApplyCreditLimit(String userId, UserContext userContext) {
+    public ChatVO handleApplyCreditLimit(UserContext userContext) {
         try {
-            return "好的，已为您开启授信申请流程。接下来需要完成实名校验与必要信息采集，以评估您的可用额度";
+            ChatVO vo = new ChatVO();
+            vo.setContent(MSG_APPLY_CREDIT_START);
+            return vo;
         } catch (Exception e) {
-            logger.error("handleApplyCreditLimit failed for user: {}", userId, e);
-            return "抱歉，开启授信流程时出现问题，请稍后再试。";
+            logger.error("handleApplyCreditLimit failed for user: {}", userContext.getUserId(), e);
+            ChatVO vo = new ChatVO();
+            vo.setContent(MSG_APPLY_CREDIT_ERROR);
+            return vo;
         }
     }
 
@@ -167,9 +299,9 @@ public class ConsumerLoanTools {
         if (term) items.add("借款期限（月）");
         if (purpose) items.add("借款用途");
         if (items.isEmpty()) {
-            return "当前未检测到需要澄清的参数，如需生成方案请提供金额、期限或用途信息。";
+            return MSG_NO_PARAMS_DETECTED;
         }
-        return "为了为您生成合适的借款方案，请补充：" + String.join("、", items) + "。";
+        return MSG_CLARIFY_PREFIX + String.join("、", items) + "。";
     }
 
 
@@ -217,4 +349,6 @@ public class ConsumerLoanTools {
         if (p.isEmpty() || "true".equalsIgnoreCase(p)) return null;
         return p;
     }
+
+
 }

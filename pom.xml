@@ -23,7 +23,7 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     </properties>
 
-    <dependencies>
+  <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -127,7 +127,20 @@
             <scope>test</scope>
         </dependency>
 
-    </dependencies>
+        <!-- Redis: 用于基于Redis的聊天记忆存储 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+      <dependency>
+          <groupId>cn.hutool</groupId>
+          <artifactId>hutool-all</artifactId>
+          <version>5.8.40</version> <!-- 请检查最新版本 -->
+      </dependency>
+
+
+  </dependencies>
 
     <build>
         <plugins>

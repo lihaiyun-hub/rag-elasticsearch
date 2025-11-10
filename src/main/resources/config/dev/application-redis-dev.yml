@@ -1,0 +1,19 @@
+# Redis Configuration - 开发环境
+# 基于Redis的聊天记忆后端选择与连接设置
+
+spring:
+  ai:
+    chat:
+      memory:
+        backend: redis        # 选择Redis作为聊天记忆后端
+        max-rounds: 2         # 与内存实现对齐：最近2轮（约4条消息）
+        max-messages: 10      # 若未设置轮数，则按消息条数限制
+        ttl-seconds: 86400    # 默认24小时TTL
+
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      password: 123456
+      timeout: 5s
+      # client-type: lettuce  # 默认即可

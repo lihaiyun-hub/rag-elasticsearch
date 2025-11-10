@@ -23,6 +23,7 @@ public class ChatRequest {
     private String userId;  // 用户ID
     private String sessionId;  // 会话ID
     private String uuid;  // 唯一标识
+    private String workFlowCode; // 授信/借款流程编码
     private LoanInfo loanInfo;  // 贷款信息
     private Profile profile;  // 用户信息
 

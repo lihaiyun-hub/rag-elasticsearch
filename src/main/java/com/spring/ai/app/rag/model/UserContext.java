@@ -1,14 +1,9 @@
 package com.spring.ai.app.rag.model;
 
-import java.util.List;
-
-/**
- * 用户上下文信息
- * 用于存储贷款智能助手所需的用户相关信息
- */
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.NoArgsConstructor;
+
+import java.util.List;
 
 /**
  * @author LHY
@@ -23,12 +18,13 @@ public class UserContext {
     private Double availableCredit;
     private Boolean authorized; // 授信状态：null 表示未提供；true/false 表示显式状态
     private List<Integer> termOptions;
-    private List<String> loanPurposes;
+    private String loanPurposeCode;
     private String bankCardNumber;
     private String bankName;
 
     private String tenantCode; // 租户编码
     private String workFlowFlag;  // 授信/借款流程标识
+    private String workFlowCode;  // 授信/借款流程编码
     private Integer messageType;  // 消息处理类型
     private String userId;  // 用户ID
     private String sessionId;  // 会话ID
@@ -41,6 +37,10 @@ public class UserContext {
 
     // Flattened from LoanInfo
     private String contractNum;
+    private String contractStatus; // 合同状态
+    private String price;          // 金额（messageType=5兼容字段）
+    private String bankCarCode;    // 银行卡编号
+    private String term;           // 分期期数（messageType=5兼容字段）
 
     public UserContext() {
         // 默认值
@@ -49,8 +49,7 @@ public class UserContext {
         this.authorized = null;
     }
 
-    public UserContext(String userName, Double availableCredit,
-                       String recentRepaymentStatus) {
+    public UserContext(String userName, Double availableCredit) {
         this.userName = userName;
         this.availableCredit = availableCredit;
         this.authorized = null;
@@ -89,12 +88,12 @@ public class UserContext {
         this.termOptions = termOptions;
     }
 
-    public List<String> getLoanPurposes() {
-        return loanPurposes;
+    public String getLoanPurposeCode() {
+        return loanPurposeCode;
     }
 
-    public void setLoanPurposes(List<String> loanPurposes) {
-        this.loanPurposes = loanPurposes;
+    public void setLoanPurposeCode(String loanPurposeCode) {
+        this.loanPurposeCode = loanPurposeCode;
     }
 
     public String getBankCardNumber() {
@@ -119,6 +118,14 @@ public class UserContext {
 
     public void setTenantCode(String tenantCode) {
         this.tenantCode = tenantCode;
+    }
+
+    public String getWorkFlowCode() {
+        return workFlowCode;
+    }
+
+    public void setWorkFlowCode(String workFlowCode) {
+        this.workFlowCode = workFlowCode;
     }
 
     public String getWorkFlowFlag() {
@@ -193,6 +200,37 @@ public class UserContext {
         this.contractNum = contractNum;
     }
 
+    public String getContractStatus() {
+        return contractStatus;
+    }
+
+    public void setContractStatus(String contractStatus) {
+        this.contractStatus = contractStatus;
+    }
+
+    public String getPrice() {
+        return price;
+    }
+
+    public void setPrice(String price) {
+        this.price = price;
+    }
+
+    public String getBankCarCode() {
+        return bankCarCode;
+    }
+
+    public void setBankCarCode(String bankCarCode) {
+        this.bankCarCode = bankCarCode;
+    }
+
+    public String getTerm() {
+        return term;
+    }
+
+    public void setTerm(String term) {
+        this.term = term;
+    }
 
 
     @Override
