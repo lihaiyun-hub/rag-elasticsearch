@@ -1,18 +1,16 @@
 package com.spring.ai.app.rag.retriever;
 
 import com.spring.ai.app.rag.model.Document;
-import com.spring.ai.app.rag.model.Query;
 import com.spring.ai.app.rag.model.Message;
+import com.spring.ai.app.rag.model.Query;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**

@@ -1,7 +1,6 @@
 package com.spring.ai.app.rag.chat;
 
 
-import com.spring.ai.app.rag.model.KnowledgeRecord;
 import com.spring.ai.app.rag.model.Message;
 import com.spring.ai.app.rag.services.LargeLanguageModelService;
 import org.springframework.core.io.Resource;

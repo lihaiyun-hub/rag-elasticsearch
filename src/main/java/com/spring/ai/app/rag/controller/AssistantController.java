@@ -1,23 +1,16 @@
 package com.spring.ai.app.rag.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.spring.ai.app.rag.chat.ChatMemory;
-import com.spring.ai.app.rag.model.ChatRequest;
-import com.spring.ai.app.rag.model.ChatVO;
-import com.spring.ai.app.rag.model.LoanResponseDTO;
-import com.spring.ai.app.rag.model.Message;
-import com.spring.ai.app.rag.model.LoanInfo;
-import com.spring.ai.app.rag.model.Profile;
-import com.spring.ai.app.rag.model.UserContext;
-import com.spring.ai.app.rag.services.ChatService;
 import com.spring.ai.app.rag.cache.RedisHashCache;
+import com.spring.ai.app.rag.chat.ChatMemory;
+import com.spring.ai.app.rag.model.*;
+import com.spring.ai.app.rag.services.ChatService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/assistant")
@@ -28,16 +21,13 @@ public class AssistantController {
 
     private final ChatMemory chatMemory;
     private final RedisHashCache redisHashCache;
-    private final ObjectMapper objectMapper;
 
     public AssistantController(ChatService chatService,
                                ChatMemory chatMemory,
-                               RedisHashCache redisHashCache,
-                               ObjectMapper objectMapper) {
+                               RedisHashCache redisHashCache) {
         this.chatService = chatService;
         this.chatMemory = chatMemory;
         this.redisHashCache = redisHashCache;
-        this.objectMapper = objectMapper;
     }
 
     @PostMapping(path="/chat")
@@ -120,7 +110,7 @@ public class AssistantController {
             String sessionId = request.getSessionId();
             String storageId = (tenant != null && !tenant.isBlank()) ? (tenant + ":" + sessionId) : sessionId;
             String key = "loaninfo:" + storageId;
-            java.util.Map<String, String> map = new java.util.HashMap<>();
+            Map<String, String> map = new HashMap<>();
             if (loanInfo.getMaxPrice() != null) map.put("maxPrice", loanInfo.getMaxPrice());
             if (loanInfo.getContractNum() != null) map.put("contractNum", loanInfo.getContractNum());
             if (loanInfo.getContractStatus() != null) map.put("contractStatus", loanInfo.getContractStatus());

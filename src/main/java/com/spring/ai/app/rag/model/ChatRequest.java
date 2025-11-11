@@ -1,9 +1,6 @@
 package com.spring.ai.app.rag.model;
 
 import lombok.*;
-import org.springframework.beans.factory.annotation.Autowired;
-
-import java.util.List;
 
 /**
  * 聊天请求体

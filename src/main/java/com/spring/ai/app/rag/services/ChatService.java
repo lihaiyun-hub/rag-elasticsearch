@@ -10,10 +10,12 @@ import com.spring.ai.app.rag.security.PromptInjectionFilter;
 import com.spring.ai.app.rag.tools.ConsumerLoanTools;
 import com.spring.ai.app.rag.utils.DocumentParserUtils;
 import com.spring.ai.app.rag.utils.JsonExtractor;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -33,7 +35,6 @@ public class ChatService {
     private final ChatMemory chatMemory;   // ← 统一聊天历史存储
     private final RerankPostProcessor rerankPostProcessor;
     private final ConsumerLoanTools consumerLoanTools;
-    private final ObjectMapper objectMapper;
 
     public ChatService(
             ConfigurableDocumentRetriever documentRetriever,
@@ -42,8 +43,7 @@ public class ChatService {
 
             ChatMemory chatMemory,
             RerankPostProcessor rerankPostProcessor,
-            ConsumerLoanTools consumerLoanTools,
-            ObjectMapper objectMapper) {
+            ConsumerLoanTools consumerLoanTools) {
         this.documentRetriever = documentRetriever;
         this.chatClient = chatClient;
         this.promptInjectionFilter = promptInjectionFilter;
@@ -51,7 +51,6 @@ public class ChatService {
         this.chatMemory = chatMemory;
         this.rerankPostProcessor = rerankPostProcessor;
         this.consumerLoanTools = consumerLoanTools;
-        this.objectMapper = objectMapper;
 
     }
 
@@ -64,89 +63,130 @@ public class ChatService {
      */
     public ChatVO chat(String userMessage, UserContext userContext) {
         String storageId = buildStorageId(userContext);
+        boolean authorized = userContext.getAuthorized();
+        Integer messageType = userContext.getMessageType();
         List<Message> history = chatMemory.get(storageId);
+        ChatVO chatVO = null;
         try {
-            // 1. 输入安全检查和清理
-            String sanitizedInput = promptInjectionFilter.sanitizeInput(userMessage);
-            if (sanitizedInput == null || sanitizedInput.trim().isEmpty()) {
-                ChatVO vo = new ChatVO();
-                vo.setContent("请输入您的问题，我将为您提供帮助。");
-                return vo;
+            switch (messageType) {
+                case 1:
+                    // 首次推荐借款方案
+                    chatVO = consumerLoanTools.generateLoanOffers(userContext, new HashMap<>());
+                    break;
+                case 2:
+                    // 通用聊天
+                    chatVO = chat(userMessage, userContext, storageId, authorized, history);
+                    break;
+                default:
+                    // 流程处理
+                    chatVO = processWorkflow(userMessage, userContext, storageId, authorized, history);
+                    break;
             }
-            // 2. 数字输入校验与转换
-            NumericInputCheckResult numericCheck = applyNumericInputRules(storageId, userContext, history, sanitizedInput);
-            if (numericCheck.earlyResponse() != null) {
-                // 已在方法内记录对话历史，这里直接返回早期提示
-                return numericCheck.earlyResponse();
-            }
-            sanitizedInput = numericCheck.processedInput();
-
-            // 3. 检索：根据授权状态设置期望的 phase，并将“最新query + 历史对话”交给检索层（包含增强查询与批量检索）
-            List<Document> documents = retrieveDocuments(storageId, sanitizedInput, userContext, history);
-            if (documents.isEmpty()) {
-                ChatVO vo = new ChatVO();
-                vo.setContent("抱歉，未找到相关内容，请换个说法试试。");
-                return vo;
-            }
-            // 传递 history 给重排序，使其可选择使用增强查询进行多路重排序融合
-//            documents = rerankPostProcessor.process(retrievalQuery, documents);
-
-            logRetrievedDocuments(documents);
-            KnowledgeRecord record = DocumentParserUtils.parseDocumentToKnowledgeRecord(documents.get(0));
-
-            ChatVO finalVO = new ChatVO();
-            switch (record.getProcessingType()) {
-                case DIRECT_ANSWER -> {
-                    finalVO.setContent(record.getAnswer());
-                    logger.info("【直接回答】query={} -> answer={}", sanitizedInput, finalVO.getContent());
-                }
-                case INTENT_ROUTING -> {
-                    logger.info("【意图路由】query={} -> 开始提取意图", sanitizedInput);
-
-                    String raw = chatClient.prompt()
-                            .system(s -> {
-                                s.param("example_query", record.getQuery());
-                                s.param("example_cot", record.getCotThinking());
-                                s.param("example_output", record.getAnswer());
-                            })
-                            .user(sanitizedInput)
-                            .call()
-                            .content();
-                    Map<String, Object> intentData = JsonExtractor.parseIntentAndParamsFromRawResponse(raw);
-                    String intent = (String) intentData.get("intent");
-                    @SuppressWarnings("unchecked") Map<String, Object> params = (Map<String, Object>) intentData.get("params");
-                    boolean authorized = userContext.getAuthorized();
-                    switch (intent) {
-                        case "loan_application", "apply_loan" ->
-                            // 借款：已授信→生成方案；未授信→开启授信
-                                finalVO = authorized
-                                        ? consumerLoanTools.generateLoanOffers(userContext, params)
-                                        : consumerLoanTools.handleApplyCreditLimit(userContext);
-                        case "query_credit_limit", "credit_apply", "apply_limit" ->
-                            // 查询/申请额度：已授信→返回额度话术；未授信→开启授信
-                                finalVO = authorized
-                                        ? consumerLoanTools.handleQueryCreditLimit(userContext)
-                                        : consumerLoanTools.handleApplyCreditLimit(userContext);
-                        default ->
-                            // 未识别的操作：直接回传模型JSON输出
-                                finalVO.setContent(intentData.toString());
-                    }
+            return chatVO;
 
 
-                }
-                default -> finalVO.setContent("未知的处理类型");
-            }
-            // 4. 持久化本次对话（用户问 & 助手答）
-            chatMemory.add(storageId, Message.builder().type(Message.Type.USER).content(sanitizedInput).build());
-            chatMemory.add(storageId, Message.builder().type(Message.Type.ASSISTANT).content(finalVO.getContent()).build());
-
-            return finalVO;
         } catch (Exception e) {
             logger.error("聊天处理异常 - storageId: {}, userId: {}", storageId, userContext.getUserId(), e);
             ChatVO vo = new ChatVO();
             vo.setContent("抱歉，系统暂时无法处理您的请求，请稍后再试。");
             return vo;
         }
+    }
+
+    private ChatVO processWorkflow(String userMessage, UserContext userContext, String storageId, boolean authorized, List<Message> history) {
+        String workFlowCode = userContext.getWorkFlowCode();
+        storageId = buildStorageId(userContext);
+        if (StringUtils.equalsAny(workFlowCode, "A02-1", "A05-1","A07","A09","A10","B06","B32")){
+//            todo 根据不同流程编码查询文案
+            return new ChatVO("");
+        }
+//        todo 校验参数
+        if (StringUtils.equals(workFlowCode,"B29")){
+            String content = "".replace("${alias}",userContext.getUserName())
+                    .replace("${price}",userContext.getPrice())
+                    .replace("${term}",userContext.getTerm());
+
+        }
+
+        return null;
+    }
+
+    private ChatVO chat(String userMessage, UserContext userContext, String storageId, boolean authorized, List<Message> history) {
+        // 1. 输入安全检查和清理
+        String sanitizedInput = promptInjectionFilter.sanitizeInput(userMessage);
+        if (sanitizedInput == null || sanitizedInput.trim().isEmpty()) {
+            ChatVO vo = new ChatVO();
+            vo.setContent("请输入您的问题，我将为您提供帮助。");
+            return vo;
+        }
+        // 2. 数字输入校验与转换
+        NumericInputCheckResult numericCheck = applyNumericInputRules(storageId, authorized, history, sanitizedInput);
+        if (numericCheck.earlyResponse() != null) {
+            // 已在方法内记录对话历史，这里直接返回早期提示
+            return numericCheck.earlyResponse();
+        }
+        sanitizedInput = numericCheck.processedInput();
+
+        // 3. 检索：根据授权状态设置期望的 phase，并将“最新query + 历史对话”交给检索层（包含增强查询与批量检索）
+        List<Document> documents = retrieveDocuments(storageId, sanitizedInput, authorized, history);
+        if (documents.isEmpty()) {
+            ChatVO vo = new ChatVO();
+            vo.setContent("抱歉，未找到相关内容，请换个说法试试。");
+            return vo;
+        }
+        // 传递 history 给重排序，使其可选择使用增强查询进行多路重排序融合
+        // documents = rerankPostProcessor.process(retrievalQuery, documents);
+
+        logRetrievedDocuments(documents);
+        KnowledgeRecord record = DocumentParserUtils.parseDocumentToKnowledgeRecord(documents.get(0));
+
+        ChatVO finalVO = new ChatVO();
+        switch (record.getProcessingType()) {
+            case DIRECT_ANSWER -> {
+                finalVO.setContent(record.getAnswer());
+                logger.info("【直接回答】query={} -> answer={}", sanitizedInput, finalVO.getContent());
+            }
+            case INTENT_ROUTING -> {
+                logger.info("【意图路由】query={} -> 开始提取意图", sanitizedInput);
+
+                String raw = chatClient.prompt()
+                        .system(s -> {
+                            s.param("example_query", record.getQuery());
+                            s.param("example_cot", record.getCotThinking());
+                            s.param("example_output", record.getAnswer());
+                        })
+                        .user(sanitizedInput)
+                        .call()
+                        .content();
+                Map<String, Object> intentData = JsonExtractor.parseIntentAndParamsFromRawResponse(raw);
+                String intent = (String) intentData.get("intent");
+                @SuppressWarnings("unchecked") Map<String, Object> params = (Map<String, Object>) intentData.get("params");
+
+                switch (intent) {
+                    case "loan_application", "apply_loan" ->
+                        // 借款：已授信→生成方案；未授信→开启授信
+                            finalVO = authorized
+                                    ? consumerLoanTools.generateLoanOffers(userContext, params)
+                                    : consumerLoanTools.handleApplyCreditLimit();
+                    case "query_credit_limit", "credit_apply", "apply_limit" ->
+                        // 查询/申请额度：已授信→返回额度话术；未授信→开启授信
+                            finalVO = authorized
+                                    ? consumerLoanTools.handleQueryCreditLimit(userContext)
+                                    : consumerLoanTools.handleApplyCreditLimit();
+                    default ->
+                        // 未识别的操作：直接回传模型JSON输出
+                            finalVO.setContent(intentData.toString());
+                }
+
+
+            }
+            default -> finalVO.setContent("未知的处理类型");
+        }
+        // 4. 持久化本次对话（用户问 & 助手答）
+        chatMemory.add(storageId, Message.builder().type(Message.Type.USER).content(sanitizedInput).build());
+        chatMemory.add(storageId, Message.builder().type(Message.Type.ASSISTANT).content(finalVO.getContent()).build());
+
+        return finalVO;
     }
 
     private String buildStorageId(UserContext userContext) {
@@ -163,10 +203,9 @@ public class ChatService {
      * 将最新 query 与历史对话、phase 一并传递给检索层。
      * 入参 storageId 为租户前缀的会话键（tenantCode:sessionId），用于在检索管线中关联会话历史。
      */
-    private List<Document> retrieveDocuments(String storageId, String input, UserContext userContext, List<Message> history) {
-        boolean authorizedForRetrieval = userContext.getAuthorized();
+    private List<Document> retrieveDocuments(String storageId, String input, boolean authorizedForRetrieval, List<Message> history) {
         String desiredPhase = authorizedForRetrieval ? "post_credit" : "pre_credit";
-        java.util.Map<String, Object> md = new java.util.HashMap<>();
+        Map<String, Object> md = new HashMap<>();
         md.put("history", history);
         md.put("phase", desiredPhase);
         Query retrievalQuery = new Query(input, md, storageId);
@@ -174,9 +213,9 @@ public class ChatService {
     }
 
     // 抽取：日志记录检索到的文档片段与元数据
-    private void logRetrievedDocuments(List<com.spring.ai.app.rag.model.Document> documents) {
+    private void logRetrievedDocuments(List<Document> documents) {
         for (int i = 0; i < documents.size(); i++) {
-            com.spring.ai.app.rag.model.Document d = documents.get(i);
+            Document d = documents.get(i);
             String text = d != null ? d.getText() : "";
             String snippet = text == null ? "" : (text.length() > 200 ? text.substring(0, 200) + "..." : text);
             logger.info("文档#{} | 内容片段=\"{}\" | metadata={}", i + 1, snippet, d != null ? d.metadata() : Map.of());
@@ -207,14 +246,13 @@ public class ChatService {
      * - 抽取为独立方法，便于集中维护数字相关的业务规则，减少 chat() 的分支复杂度；
      * - 本方法内部负责在早退场景下统一记录聊天历史，调用方只需根据 earlyResponse 是否为空决定是否返回即可。
      */
-    private NumericInputCheckResult applyNumericInputRules(String storageId, UserContext userContext, List<Message> history, String input) {
+    private NumericInputCheckResult applyNumericInputRules(String storageId, boolean authorized, List<Message> history, String input) {
         try {
             // Step 0: 授信状态优先级判断（仅拦截纯数字输入）
             String trimmed = input == null ? "" : input.trim();
             boolean isDigitsOnly = trimmed.matches("\\d+");
-            boolean authorized = userContext.getAuthorized();
             if (!authorized && isDigitsOnly) {
-                ChatVO early = consumerLoanTools.handleApplyCreditLimit(userContext);
+                ChatVO early = consumerLoanTools.handleApplyCreditLimit();
                 chatMemory.add(storageId, Message.builder().type(Message.Type.USER).content(input).build());
                 chatMemory.add(storageId, Message.builder().type(Message.Type.ASSISTANT).content(early.getContent()).build());
                 return new NumericInputCheckResult(input, early);

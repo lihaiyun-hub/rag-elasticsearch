@@ -6,6 +6,7 @@ import com.spring.ai.app.rag.cache.RedisHashCache;
 import com.spring.ai.app.rag.model.ChatVO;
 import com.spring.ai.app.rag.model.LoanResponseDTO;
 import com.spring.ai.app.rag.model.UserContext;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -23,7 +24,6 @@ public class ConsumerLoanTools {
     private static final String MSG_CLARIFY_FALLBACK = "为了为你生成合适的借款方案，请补充：借款金额（元）、借款期限（月）、借款用途。";
 
     private static final String MSG_OFFER_CONTENT = "为您推荐如下借款方案，若与您的需求不符，您可以直接在卡片上修改，或者告诉我您的需求，例如，您可以对我说我要借500元或者我要分12期等等。";
-    private static final String MSG_OFFER_ERROR = "生成借款方案失败，请稍后再试";
 
     private static final String MSG_QUERY_LIMIT_FMT = "您当前的可用额度为 %s。您要借多少呢？";
     private static final String MSG_QUERY_ERROR = "抱歉，查询额度时出现问题，请稍后再试。";
@@ -38,7 +38,7 @@ public class ConsumerLoanTools {
     private static final double MINIMUM_SINGLE_BORROWABLE_AMOUNT = 100.0;
     private static final double ROUND_UNIT = 100.0;
 
-    public ConsumerLoanTools( RedisHashCache redisHashCache) {
+    public ConsumerLoanTools(RedisHashCache redisHashCache) {
         this.redisHashCache = redisHashCache;
     }
 
@@ -51,21 +51,21 @@ public class ConsumerLoanTools {
         Map<String, Object> parsed = new HashMap<>();
 
         // 金额
-        Object amountObj = params != null ? params.get("amount") : null;
+        Object amountObj = ObjectUtil.isNotEmpty(params) ? params.get("amount") : null;
         Double amount = parseAmountField(amountObj);
         if (amount != null) {
             parsed.put("amount", amount);
         }
 
         // 期数
-        Object termObj = params != null ? params.get("term") : null;
+        Object termObj = ObjectUtil.isNotEmpty(params) ? params.get("term") : null;
         Integer term = parseTermField(termObj);
         if (term != null) {
             parsed.put("term", term);
         }
 
         // 用途
-        Object purposeObj = params != null ? params.get("purpose") : null;
+        Object purposeObj = ObjectUtil.isNotEmpty(params) ? params.get("purpose") : null;
         String purpose = parsePurposeField(purposeObj);
         if (purpose != null && !purpose.isEmpty()) {
             parsed.put("purpose", purpose);
@@ -76,9 +76,9 @@ public class ConsumerLoanTools {
 
 
     private String clarification(Map<String, Object> parameters) {
-        boolean askAmount = needsClarification(parameters != null ? parameters.get("amount") : null);
-        boolean askTerm = needsClarification(parameters != null ? parameters.get("term") : null);
-        boolean askPurpose = needsClarification(parameters != null ? parameters.get("purpose") : null);
+        boolean askAmount = needsClarification(ObjectUtil.isNotEmpty(parameters ) ? parameters.get("amount") : null);
+        boolean askTerm = needsClarification(ObjectUtil.isNotEmpty(parameters ) ? parameters.get("term") : null);
+        boolean askPurpose = needsClarification(ObjectUtil.isNotEmpty(parameters ) ? parameters.get("purpose") : null);
         if (askAmount || askTerm || askPurpose) {
             return buildClarificationMessage(askAmount, askTerm, askPurpose);
         }
@@ -88,16 +88,19 @@ public class ConsumerLoanTools {
 
     // 重载：接收 Map 参数，内置澄清判断；当某字段为布尔/字符串 "true" 时直接返回澄清话术
     public ChatVO generateLoanOffers(UserContext userContext, Map<String, Object> parameters) {
-
         try {
             String cacheKey = buildCacheKey(userContext);
             Map<String, String> fields = redisHashCache.hEntries(cacheKey);
+            String contractStatus = fields.get("contractStatus");
+            if (StringUtils.equals(contractStatus, "1")){
+                return new ChatVO("尊敬的客户,小优非常理解您的需求，也希望能帮助您解决当前的财务问题。不过，根据我司记录显示，您名下仍有逾期未结清的借款，因此小优暂时无法为您办理新的业务。\n如果您有任何疑问或需要进一步的帮助，建议您进入【我的】-【在线客服】进一步咨询");
+            }
             // 校验当前用户是否有可用额度
             String maxPriceStr = fields.get("maxPrice");
             if (ObjectUtil.isEmpty(maxPriceStr) || Double.parseDouble(maxPriceStr.trim()) <= 0) {
                 return new ChatVO("您暂无可用额度");
             }
-            Double credit = Double.parseDouble(maxPriceStr);
+            double credit = Double.parseDouble(maxPriceStr);
             // offer_count>0 时，说明用户已生成过借款方案
             int offerCount = Integer.parseInt(ObjectUtil.isEmpty(fields.get("offer_count")) ? "0" : fields.get("offer_count"));
             Map<String, Object> parsed = parseLoanParameters(parameters);
@@ -105,9 +108,9 @@ public class ConsumerLoanTools {
             List<Integer> termOptions = redisHashCache.hGetJson(cacheKey, "terms_json", new TypeReference<>() {
             });
 
-            Double amount = null;
-            Integer termMonths = null;
-            String purpose = null;
+            double amount;
+            int termMonths;
+            String purpose;
 
             if (offerCount > 0) {
                 // 对用户意图进行澄清
@@ -120,7 +123,6 @@ public class ConsumerLoanTools {
                 // 期数：若当前轮次对话未指定，使用历史 term 字段值
                 termMonths = ObjectUtil.isEmpty(parsed.get("term")) ? Integer.parseInt(fields.get("term").trim()) : (Integer) parsed.get("term");
                 // 用途：若当前轮次对话未指定，使用历史 loanPurseCode 字段值
-                purpose = ObjectUtil.isEmpty(parsed.get("purpose")) ? fields.get("loanPurseCode") : (String) parsed.get("purpose");
 
             } else {
                 // 金额：若当前轮次对话未指定，根据历史借款记录计算平均借款金额
@@ -128,12 +130,12 @@ public class ConsumerLoanTools {
                 // 期数：若当前轮次对话未指定，使用历史借款记录中频率最高的期数
                 termMonths = ObjectUtil.isEmpty(parsed.get("term")) ? getModeTerm(fetchRecentBorrowRecords(contractNum, UUID.randomUUID().toString()), termOptions) : (Integer) parsed.get("term");
                 // 用途：若当前轮次对话未指定，使用缓存中的数据
-                purpose = ObjectUtil.isEmpty(parsed.get("purpose")) ? fields.get("loanPurseCode") : (String) parsed.get("purpose");
             }
+            purpose = ObjectUtil.isEmpty(parsed.get("purpose")) ? fields.get("loanPurseCode") : (String) parsed.get("purpose");
             String content = MSG_OFFER_CONTENT;
             // 借款金额小于100,取100
             if (amount < MINIMUM_SINGLE_BORROWABLE_AMOUNT) {
-                amount = 100.0;
+                amount = MINIMUM_SINGLE_BORROWABLE_AMOUNT;
                 content = "单笔借款金额不能小于100元，您的借款金额已调整为100元";
             }
 
@@ -149,7 +151,7 @@ public class ConsumerLoanTools {
             }
             // 借款金额必须是100的整数倍
             if (amount % ROUND_UNIT != 0) {
-                amount = Math.round(amount / ROUND_UNIT) * ROUND_UNIT;
+                amount = Math.floor(amount / ROUND_UNIT) * ROUND_UNIT;
                 content = "借款金额必须是100的整数倍，您的借款金额已调整为" + amount + "元";
             }
             // 借款期数不在可选分期选项中，取最近的一个
@@ -159,9 +161,10 @@ public class ConsumerLoanTools {
                 content = "借款期数不在可选分期选项中，您的借款期数已调整为" + termMonths + "月";
             }
             logger.info("Generating loan offers for authorized user: {}, amount: {}, term: {}, purpose: {}", userContext.getUserId(), amount, termMonths, purpose);
-            ChatVO loanOffer = generateLoanOffers(amount, termMonths, purpose);
+            ChatVO loanOffer = generateLoanOffers(amount, termMonths, purpose,cacheKey);
             loanOffer.setContent(content);
             // 生成成功后，更新缓存中的 offer_count（用于下次判断是否为首次）
+
             redisHashCache.hPut(cacheKey, "offer_count", String.valueOf(offerCount + 1));
             return loanOffer;
         } catch (Exception e) {
@@ -181,27 +184,19 @@ public class ConsumerLoanTools {
     }
 
 
-    public ChatVO generateLoanOffers(Double amount, Integer termMonths, String purpose) {
-
-        try {
-            // 设置默认值
-            double finalAmount = amount != null ? amount : 50000.0;
-            int finalTerm = termMonths != null ? termMonths : 12;
+    public ChatVO generateLoanOffers(Double amount, Integer termMonths, String purpose,String cacheKey) {
+            Map<String, String> map = new HashMap<>();
             LoanResponseDTO loan = new LoanResponseDTO();
-            loan.setPrice(String.valueOf(finalAmount));
-            loan.setTerm(String.valueOf(finalTerm));
+            loan.setPrice(String.valueOf(amount));
+            loan.setTerm(String.valueOf(termMonths));
             loan.setLoanPurseCode(purpose);
             ChatVO vo = new ChatVO();
             vo.setTypeCode(1); // 标记为卡片回复，便于上层判断
-            vo.setContent(MSG_OFFER_CONTENT);
             vo.setLoanInfo(loan);
+            map.put("price", String.valueOf(amount));
+            map.put("term", String.valueOf(termMonths));
+            redisHashCache.hPutAll(cacheKey, map);
             return vo;
-
-        } catch (Exception e) {
-            ChatVO vo = new ChatVO();
-            vo.setContent(MSG_OFFER_ERROR);
-            return vo;
-        }
     }
 
 
@@ -279,13 +274,12 @@ public class ConsumerLoanTools {
      * 申请额度（开启授信流程）
      * 当用户回复“申请额度”时，开启授信流程并返回对应话术。
      */
-    public ChatVO handleApplyCreditLimit(UserContext userContext) {
+    public ChatVO handleApplyCreditLimit() {
         try {
             ChatVO vo = new ChatVO();
             vo.setContent(MSG_APPLY_CREDIT_START);
             return vo;
         } catch (Exception e) {
-            logger.error("handleApplyCreditLimit failed for user: {}", userContext.getUserId(), e);
             ChatVO vo = new ChatVO();
             vo.setContent(MSG_APPLY_CREDIT_ERROR);
             return vo;
